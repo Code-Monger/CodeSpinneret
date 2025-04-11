@@ -383,19 +383,19 @@ func applyHunk(lines []string, hunk Hunk, location int) []string {
 func RegisterPatch(mcpServer *server.MCPServer) {
 	// Create the tool definition
 	patchTool := mcp.NewTool("patch",
-		mcp.WithDescription("Applies patches to files using the standard unified diff format"),
+		mcp.WithDescription("Applies patches to files using the standard unified diff format. Supports both file-specific and directory-wide patching with configurable path handling. Uses the PATCH_ROOT_DIR environment variable for consistent relative path resolution across tools. Provides detailed reporting of applied and failed hunks, with dry-run capability for safe testing. Ideal for code modifications, bug fixes, and implementing changes from external sources."),
 		mcp.WithString("patch_content",
-			mcp.Description("The content of the patch file in unified diff format"),
+			mcp.Description("The content of the patch file in unified diff format, containing the changes to apply to one or more files"),
 			mcp.Required(),
 		),
 		mcp.WithString("target_directory",
-			mcp.Description("The directory where the files to be patched are located (default: current directory)"),
+			mcp.Description("The directory where the files to be patched are located (absolute or relative path, default: current directory)"),
 		),
 		mcp.WithNumber("strip_level",
-			mcp.Description("The number of leading directories to strip from file names (default: 0)"),
+			mcp.Description("The number of leading directories to strip from file paths in the patch, useful for applying patches created in different directory structures (default: 0)"),
 		),
 		mcp.WithBoolean("dry_run",
-			mcp.Description("If true, show what would be done but don't actually modify any files (default: false)"),
+			mcp.Description("If true, performs a simulation showing what would be changed without actually modifying any files, useful for testing patches before applying them (default: false)"),
 		),
 	)
 

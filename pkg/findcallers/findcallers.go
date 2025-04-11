@@ -319,22 +319,22 @@ func searchFileForCalls(filePath, functionName string, language Language) ([]Cal
 func RegisterFindCallers(mcpServer *server.MCPServer) {
 	// Create the tool definition
 	findCallersTool := mcp.NewTool("findcallers",
-		mcp.WithDescription("Finds callers of a function across a codebase"),
+		mcp.WithDescription("Finds all callers of a specified function across a codebase. Supports multiple programming languages including Go, JavaScript, Python, Java, C#, C/C++, Ruby, and PHP. Analyzes code to identify function calls while handling complex patterns like method calls, nested functions, and calls within comments or string literals. Returns detailed results with file paths, line numbers, and context for each call, making it ideal for code refactoring, impact analysis, and understanding function usage patterns."),
 		mcp.WithString("function_name",
-			mcp.Description("The name of the function to find callers for"),
+			mcp.Description("The name of the function to find callers for (case-sensitive, must match exactly as defined in code)"),
 			mcp.Required(),
 		),
 		mcp.WithString("search_directory",
-			mcp.Description("The directory to search in (default: current directory)"),
+			mcp.Description("The directory to search in (absolute or relative path, default: current directory)"),
 		),
 		mcp.WithString("language",
-			mcp.Description("The programming language to search for (default: all supported languages)"),
+			mcp.Description("The programming language to search for (default: all supported languages - Go, JavaScript, Python, Java, C#, C/C++, Ruby, PHP)"),
 		),
 		mcp.WithBoolean("use_relative_paths",
-			mcp.Description("Whether to use relative paths in the results (default: true)"),
+			mcp.Description("Whether to use relative paths in the results for better portability (default: true)"),
 		),
 		mcp.WithBoolean("recursive",
-			mcp.Description("Whether to search recursively in subdirectories (default: true)"),
+			mcp.Description("Whether to search recursively in subdirectories for comprehensive analysis (default: true)"),
 		),
 	)
 

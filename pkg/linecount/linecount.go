@@ -147,19 +147,19 @@ func countFileStats(filePath string, countLines, countWords, countChars bool) (*
 func RegisterLineCount(mcpServer *server.MCPServer) {
 	// Create the tool definition
 	lineCountTool := mcp.NewTool("linecount",
-		mcp.WithDescription("Counts lines, words, and characters in a file (similar to wc command)"),
+		mcp.WithDescription("Counts lines, words, and characters in a file, similar to the Unix 'wc' command. Provides detailed statistics about file content with configurable counting options. Supports both absolute and relative file paths, with automatic resolution using the PATCH_ROOT_DIR environment variable for consistent path handling across tools. Useful for code analysis, documentation metrics, and content evaluation."),
 		mcp.WithString("file_path",
-			mcp.Description("The path of the file to count"),
+			mcp.Description("The path of the file to count (absolute or relative to working directory)"),
 			mcp.Required(),
 		),
 		mcp.WithBoolean("count_lines",
-			mcp.Description("Whether to count lines (default: true)"),
+			mcp.Description("Whether to count the number of lines in the file (default: true)"),
 		),
 		mcp.WithBoolean("count_words",
-			mcp.Description("Whether to count words (default: false)"),
+			mcp.Description("Whether to count the number of words in the file, defined as space-separated sequences of characters (default: false)"),
 		),
 		mcp.WithBoolean("count_chars",
-			mcp.Description("Whether to count characters (default: false)"),
+			mcp.Description("Whether to count the total number of characters in the file, including whitespace and newlines (default: false)"),
 		),
 	)
 

@@ -154,10 +154,10 @@ func (c *Client) testTool(ctx context.Context, testTool string, toolsResult *mcp
 		return tools.TestLineCount(ctx, c.mcpClient)
 	case "findcallers":
 		return tools.TestFindCallers(ctx, c.mcpClient)
+	case "findfunc":
+		return tools.TestFindFunc(ctx, c.mcpClient)
 	case "funcdef":
 		return tools.TestFuncDef(ctx, c.mcpClient)
-	case "funcdef_strings":
-		return tools.TestFuncDefWithStrings(ctx, c.mcpClient)
 	case "stats":
 		return tools.TestStats(ctx, c.mcpClient)
 	default:
@@ -183,6 +183,7 @@ func (c *Client) testAllTools(ctx context.Context, toolsResult *mcp.ListToolsRes
 		"patch",
 		"linecount",
 		"findcallers",
+		"findfunc",
 		"funcdef",
 		"stats",
 	}

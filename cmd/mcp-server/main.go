@@ -17,6 +17,7 @@ import (
 	"github.com/Code-Monger/CodeSpinneret/pkg/codeanalysis"
 	"github.com/Code-Monger/CodeSpinneret/pkg/filesearch"
 	"github.com/Code-Monger/CodeSpinneret/pkg/findcallers"
+	"github.com/Code-Monger/CodeSpinneret/pkg/findfunc"
 	"github.com/Code-Monger/CodeSpinneret/pkg/funcdef"
 	"github.com/Code-Monger/CodeSpinneret/pkg/linecount"
 	"github.com/Code-Monger/CodeSpinneret/pkg/patch"
@@ -78,6 +79,7 @@ func main() {
 	patch.RegisterPatch(mcpServer)
 	linecount.RegisterLineCount(mcpServer)
 	findcallers.RegisterFindCallers(mcpServer)
+	findfunc.RegisterFindFunc(mcpServer)
 	funcdef.RegisterFuncDef(mcpServer)
 
 	// Register stats tool
