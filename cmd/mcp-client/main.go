@@ -18,7 +18,7 @@ import (
 var (
 	serverURL   = flag.String("server", "http://localhost:8080", "MCP server URL")
 	timeoutSecs = flag.Int("timeout", 60, "Client timeout in seconds")
-	testTool    = flag.String("tool", "calculator", "Tool to test (calculator, filesearch, cmdexec, searchreplace, screenshot, websearch)")
+	testTool    = flag.String("tool", "calculator", "Tool to test (calculator, filesearch, cmdexec, searchreplace, screenshot, websearch, rag)")
 )
 
 func main() {
@@ -184,6 +184,21 @@ func main() {
 			testWebSearch(signalCtx, sseClient)
 		} else {
 			log.Println("Web search tool not found on server")
+		}
+	case "rag":
+		found := false
+		for _, tool := range toolsResult.Tools {
+			if tool.Name == "rag" {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			log.Println("Testing RAG tool...")
+			testRAG(signalCtx, sseClient)
+		} else {
+			log.Println("RAG tool not found on server")
 		}
 	}
 
@@ -584,6 +599,57 @@ func testWebSearch(ctx context.Context, c client.MCPClient) {
 		if len(result.Content) > 0 {
 			if textContent, ok := result.Content[0].(mcp.TextContent); ok {
 				log.Printf("Web search result:\n%s", textContent.Text)
+			}
+		}
+
+		// Add a small delay between tests
+		time.Sleep(1 * time.Second)
+	}
+}
+
+// testRAG tests the RAG tool with various operations
+func testRAG(ctx context.Context, c client.MCPClient) {
+	// Define test cases
+	testCases := []struct {
+		name      string
+		arguments map[string]interface{}
+	}{
+		{
+			name: "Index repository",
+			arguments: map[string]interface{}{
+				"operation":     "index",
+				"repo_path":     ".",
+				"file_patterns": []interface{}{"*.go", "*.md"},
+			},
+		},
+		{
+			name: "Query repository",
+			arguments: map[string]interface{}{
+				"operation":   "query",
+				"repo_path":   ".",
+				"query":       "how to implement a service",
+				"num_results": 3.0,
+			},
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		log.Printf("Running RAG test: %s", tc.name)
+
+		callReq := mcp.CallToolRequest{}
+		callReq.Params.Name = "rag"
+		callReq.Params.Arguments = tc.arguments
+
+		result, err := c.CallTool(ctx, callReq)
+		if err != nil {
+			log.Printf("Failed to call rag: %v", err)
+			continue
+		}
+
+		if len(result.Content) > 0 {
+			if textContent, ok := result.Content[0].(mcp.TextContent); ok {
+				log.Printf("RAG result:\n%s", textContent.Text)
 			}
 		}
 
