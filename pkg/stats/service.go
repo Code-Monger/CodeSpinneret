@@ -3,6 +3,7 @@ package stats
 import (
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"time"
 
@@ -30,7 +31,10 @@ func GetStatsManager() *StatsManager {
 
 // HandleGetStats handles requests to get tool usage statistics
 func HandleGetStats(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	log.Printf("[Stats] Received request to get stats")
+
 	if globalStatsManager == nil {
+		log.Printf("[Stats] Error: stats manager not initialized")
 		return nil, fmt.Errorf("stats manager not initialized")
 	}
 
@@ -40,6 +44,8 @@ func HandleGetStats(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 
 	// Format the stats
 	statsText := FormatStats(sessionStats, persistentStats)
+
+	log.Printf("[Stats] Returning stats information")
 
 	// Return the result
 	return &mcp.CallToolResult{
@@ -55,6 +61,7 @@ func HandleGetStats(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 // RecordToolUsage records statistics for a tool usage
 func RecordToolUsage(toolName string, startTime time.Time, result *mcp.CallToolResult) {
 	if globalStatsManager == nil {
+		log.Printf("[Stats] Warning: stats manager not initialized, cannot record tool usage")
 		return
 	}
 
@@ -67,10 +74,13 @@ func RecordToolUsage(toolName string, startTime time.Time, result *mcp.CallToolR
 	// Estimate output tokens (this is a simple estimation)
 	outputTokens := estimateOutputTokens(result)
 
+	log.Printf("[Stats] Recording usage for tool '%s': execution time=%v, input tokens=%d, output tokens=%d",
+		toolName, executionTime, inputTokens, outputTokens)
+
 	// Record the usage
 	if err := globalStatsManager.RecordToolUsage(toolName, executionTime, inputTokens, outputTokens); err != nil {
 		// Log the error but don't fail the request
-		fmt.Printf("Failed to record tool usage: %v\n", err)
+		log.Printf("[Stats] Failed to record tool usage: %v", err)
 	}
 }
 
@@ -80,9 +90,12 @@ func WrapHandler(toolName string, handler func(ctx context.Context, request mcp.
 		// Record the start time
 		startTime := time.Now()
 
+		log.Printf("[Stats] Starting execution of tool '%s'", toolName)
+
 		// Call the original handler
 		result, err := handler(ctx, request)
 		if err != nil {
+			log.Printf("[Stats] Error executing tool '%s': %v", toolName, err)
 			return nil, err
 		}
 
@@ -91,6 +104,44 @@ func WrapHandler(toolName string, handler func(ctx context.Context, request mcp.
 
 		return result, nil
 	}
+}
+
+// HandleClientDisconnect handles a client disconnection
+func HandleClientDisconnect(sessionID string) {
+	if globalStatsManager == nil {
+		log.Printf("[Stats] Warning: stats manager not initialized, cannot handle client disconnect")
+		return
+	}
+
+	log.Printf("[Stats] Client disconnected: %s", sessionID)
+
+	// Get the session stats
+	sessionStats := globalStatsManager.GetSessionStats()
+	persistentStats := globalStatsManager.GetPersistentStats()
+
+	// Format and print the stats
+	statsText := FormatStats(sessionStats, persistentStats)
+	log.Printf("[Stats] Session statistics for client %s:\n%s", sessionID, statsText)
+
+	// In a real implementation, we would remove the session metrics from RAM here
+	// For now, we'll just log that we would do this
+	log.Printf("[Stats] Removing session metrics for client %s from RAM", sessionID)
+
+	// Reset session stats
+	globalStatsManager.ResetSessionStats()
+}
+
+// ResetSessionStats resets the session statistics
+func (m *StatsManager) ResetSessionStats() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.sessionStats = &SessionStats{
+		StartTime: time.Now(),
+		Tools:     make(map[string]*ToolStats),
+	}
+
+	log.Printf("[Stats] Session statistics reset")
 }
 
 // estimateInputTokens estimates the number of tokens in the request
@@ -156,6 +207,8 @@ func RegisterStats(mcpServer *server.MCPServer, dataDir string) error {
 
 	// Register the tool with the wrapped handler
 	mcpServer.AddTool(statsTool, wrappedHandler)
+
+	log.Printf("[Stats] Registered stats tool")
 
 	return nil
 }

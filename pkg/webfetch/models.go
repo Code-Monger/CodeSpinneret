@@ -8,6 +8,9 @@ type WebFetchRequest struct {
 	// IncludeImages determines whether to include images in the response
 	IncludeImages bool `json:"include_images"`
 
+	// StripHTML determines whether to strip all HTML tags from the content
+	StripHTML bool `json:"strip_html"`
+
 	// Timeout is the timeout in seconds
 	Timeout int `json:"timeout"`
 }

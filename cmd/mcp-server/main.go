@@ -85,6 +85,7 @@ func main() {
 		baseURLValue = fmt.Sprintf("http://localhost:%d", *port)
 	}
 
+	// Create SSE server
 	sseServer := server.NewSSEServer(
 		mcpServer,
 		server.WithBaseURL(baseURLValue),
@@ -104,10 +105,10 @@ func main() {
 
 	// Start the server in a goroutine
 	go func() {
-		log.Printf("Starting MCP server on port %d...", *port)
-		log.Printf("Base URL: %s", baseURLValue)
+		log.Printf("[Server] Starting MCP server on port %d...", *port)
+		log.Printf("[Server] Base URL: %s", baseURLValue)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+			log.Fatalf("[Server] Failed to start server: %v", err)
 		}
 	}()
 
@@ -119,9 +120,18 @@ func main() {
 	defer shutdownCancel()
 
 	// Shutdown the server
-	log.Println("Shutting down server...")
-	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("Server shutdown failed: %v", err)
+	log.Println("[Server] Shutting down server...")
+
+	// Print final stats before shutdown
+	if statsManager := stats.GetStatsManager(); statsManager != nil {
+		sessionStats := statsManager.GetSessionStats()
+		persistentStats := statsManager.GetPersistentStats()
+		statsText := stats.FormatStats(sessionStats, persistentStats)
+		log.Printf("[Server] Final server statistics:\n%s", statsText)
 	}
-	log.Println("Server stopped")
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("[Server] Server shutdown failed: %v", err)
+	}
+	log.Println("[Server] Server stopped")
 }

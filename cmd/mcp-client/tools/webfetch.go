@@ -17,6 +17,15 @@ func TestWebFetch(ctx context.Context, c client.MCPClient) error {
 		arguments map[string]interface{}
 	}{
 		{
+			name: "Fetch with HTML stripped",
+			arguments: map[string]interface{}{
+				"url":            "https://example.com",
+				"include_images": false,
+				"strip_html":     true,
+				"timeout":        10.0,
+			},
+		},
+		{
 			name: "Fetch HTML page",
 			arguments: map[string]interface{}{
 				"url":            "https://example.com",

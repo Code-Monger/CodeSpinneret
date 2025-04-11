@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -15,19 +16,32 @@ import (
 
 // Handler handles web fetch requests
 func Handler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Log the request
+	log.Printf("[WebFetch] Received request: %s", request.Params.Name)
+
 	arguments := request.Params.Arguments
 
 	// Extract URL
 	urlStr, ok := arguments["url"].(string)
 	if !ok {
+		log.Printf("[WebFetch] Error: url must be a string")
 		return nil, fmt.Errorf("url must be a string")
 	}
+	log.Printf("[WebFetch] Fetching URL: %s", urlStr)
 
 	// Extract include_images
 	includeImages := false
 	if includeImagesVal, ok := arguments["include_images"].(bool); ok {
 		includeImages = includeImagesVal
 	}
+	log.Printf("[WebFetch] Include images: %v", includeImages)
+
+	// Extract strip_html
+	stripHTML := false
+	if stripHTMLVal, ok := arguments["strip_html"].(bool); ok {
+		stripHTML = stripHTMLVal
+	}
+	log.Printf("[WebFetch] Strip HTML: %v", stripHTML)
 
 	// Extract timeout
 	timeout := 0
@@ -37,18 +51,33 @@ func Handler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolRes
 	case int:
 		timeout = v
 	}
+	log.Printf("[WebFetch] Timeout: %d seconds", timeout)
 
 	// Create request
 	webFetchRequest := WebFetchRequest{
 		URL:           urlStr,
 		IncludeImages: includeImages,
+		StripHTML:     stripHTML,
 		Timeout:       timeout,
 	}
 
 	// Fetch the web page
+	startTime := time.Now()
 	response, err := FetchWebPage(webFetchRequest)
+	fetchDuration := time.Since(startTime)
+
 	if err != nil {
+		log.Printf("[WebFetch] Error fetching %s: %v", urlStr, err)
 		return nil, err
+	}
+
+	// Log the response
+	if response.Error != "" {
+		log.Printf("[WebFetch] Error in response: %s", response.Error)
+	} else {
+		contentLength := len(response.Content)
+		log.Printf("[WebFetch] Successfully fetched %s (status: %d, content type: %s, size: %d bytes) in %v",
+			response.URL, response.StatusCode, response.ContentType, contentLength, fetchDuration)
 	}
 
 	// Create a formatted response
@@ -162,9 +191,17 @@ func FetchWebPage(request WebFetchRequest) (*WebFetchResponse, error) {
 	// Set content
 	response.Content = string(body)
 
-	// Remove images if not requested
-	if !request.IncludeImages && strings.Contains(response.ContentType, "text/html") {
-		response.Content = removeImages(response.Content)
+	// Process HTML content if needed
+	if strings.Contains(response.ContentType, "text/html") {
+		// Remove images if not requested
+		if !request.IncludeImages {
+			response.Content = removeImages(response.Content)
+		}
+
+		// Strip HTML tags if requested
+		if request.StripHTML {
+			response.Content = stripHTML(response.Content)
+		}
 	}
 
 	return response, nil
@@ -194,6 +231,36 @@ func removeImages(content string) string {
 	return result
 }
 
+// stripHTML removes all HTML tags from content
+func stripHTML(content string) string {
+	var result strings.Builder
+	inTag := false
+
+	for _, r := range content {
+		switch {
+		case r == '<':
+			inTag = true
+		case r == '>':
+			inTag = false
+		case !inTag:
+			result.WriteRune(r)
+		}
+	}
+
+	// Replace multiple spaces with a single space
+	output := result.String()
+	for strings.Contains(output, "  ") {
+		output = strings.ReplaceAll(output, "  ", " ")
+	}
+
+	// Replace multiple newlines with a single newline
+	for strings.Contains(output, "\n\n\n") {
+		output = strings.ReplaceAll(output, "\n\n\n", "\n\n")
+	}
+
+	return strings.TrimSpace(output)
+}
+
 // Register registers the webfetch handler with the MCP server
 func Register(mcpServer *server.MCPServer) {
 	// Create the tool definition
@@ -206,6 +273,9 @@ func Register(mcpServer *server.MCPServer) {
 		mcp.WithBoolean("include_images",
 			mcp.Description("Whether to include images in the response"),
 		),
+		mcp.WithBoolean("strip_html",
+			mcp.Description("Whether to strip all HTML tags from the content"),
+		),
 		mcp.WithNumber("timeout",
 			mcp.Description("Timeout in seconds"),
 		),
@@ -216,4 +286,6 @@ func Register(mcpServer *server.MCPServer) {
 
 	// Register the tool with the wrapped handler
 	mcpServer.AddTool(webfetchTool, wrappedHandler)
+
+	log.Printf("[WebFetch] Registered webfetch tool")
 }

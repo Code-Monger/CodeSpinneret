@@ -3,7 +3,6 @@ package patch
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,6 +13,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
+
+// Environment variable name for patch root directory
+const EnvPatchRootDir = "PATCH_ROOT_DIR"
 
 // HandlePatch is the handler function for the patch tool
 func HandlePatch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -31,6 +33,12 @@ func HandlePatch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 		targetDir = "." // Default to current directory
 	}
 
+	// Get root directory from environment variable
+	rootDir := os.Getenv(EnvPatchRootDir)
+	if rootDir == "" {
+		rootDir = targetDir // Default to target directory if env var not set
+	}
+
 	// Extract strip level
 	stripLevel := 0 // Default strip level
 	if stripLevelFloat, ok := arguments["strip_level"].(float64); ok {
@@ -44,7 +52,7 @@ func HandlePatch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	}
 
 	// Apply the patch
-	result, err := applyPatch(patchContent, targetDir, stripLevel, dryRun)
+	result, err := applyPatch(patchContent, targetDir, rootDir, stripLevel, dryRun)
 	if err != nil {
 		return nil, fmt.Errorf("error applying patch: %v", err)
 	}
@@ -52,6 +60,7 @@ func HandlePatch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	// Format the result
 	resultText := fmt.Sprintf("Patch Application Results:\n\n")
 	resultText += fmt.Sprintf("Target directory: %s\n", targetDir)
+	resultText += fmt.Sprintf("Root directory: %s\n", rootDir)
 	resultText += fmt.Sprintf("Strip level: %d\n", stripLevel)
 	resultText += fmt.Sprintf("Dry run: %t\n\n", dryRun)
 
@@ -111,7 +120,7 @@ type Hunk struct {
 }
 
 // applyPatch applies a patch to files in the target directory
-func applyPatch(patchContent, targetDir string, stripLevel int, dryRun bool) (*PatchResult, error) {
+func applyPatch(patchContent, targetDir, rootDir string, stripLevel int, dryRun bool) (*PatchResult, error) {
 	result := &PatchResult{
 		FilesPatched: []string{},
 		FilesSkipped: make(map[string]string),
@@ -130,8 +139,15 @@ func applyPatch(patchContent, targetDir string, stripLevel int, dryRun bool) (*P
 		// Apply strip level to the file path
 		targetPath := applyStripLevel(filePatch.TargetFile, stripLevel)
 
-		// Resolve the full path
-		fullPath := filepath.Join(targetDir, targetPath)
+		// Resolve the path relative to the root directory
+		relPath, err := filepath.Rel(rootDir, filepath.Join(rootDir, targetPath))
+		if err != nil {
+			result.FilesSkipped[targetPath] = fmt.Sprintf("error resolving relative path: %v", err)
+			continue
+		}
+
+		// Resolve the full path in the target directory
+		fullPath := filepath.Join(targetDir, relPath)
 
 		// Check if the file exists
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
@@ -140,7 +156,7 @@ func applyPatch(patchContent, targetDir string, stripLevel int, dryRun bool) (*P
 		}
 
 		// Read the file content
-		content, err := ioutil.ReadFile(fullPath)
+		content, err := os.ReadFile(fullPath)
 		if err != nil {
 			result.FilesSkipped[targetPath] = fmt.Sprintf("error reading file: %v", err)
 			continue
@@ -159,7 +175,7 @@ func applyPatch(patchContent, targetDir string, stripLevel int, dryRun bool) (*P
 
 		// Write the new content to the file (unless dry run)
 		if !dryRun {
-			err = ioutil.WriteFile(fullPath, []byte(newContent), 0644)
+			err = os.WriteFile(fullPath, []byte(newContent), 0644)
 			if err != nil {
 				result.FilesSkipped[targetPath] = fmt.Sprintf("error writing file: %v", err)
 				continue

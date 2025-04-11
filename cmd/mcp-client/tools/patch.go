@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,6 +17,11 @@ func TestPatch(ctx context.Context, c client.MCPClient) error {
 	tempDir := os.TempDir()
 	testFilePath := filepath.Join(tempDir, "mcp_test_patch.txt")
 
+	// Set the PATCH_ROOT_DIR environment variable for testing
+	originalRootDir := os.Getenv("PATCH_ROOT_DIR")
+	defer os.Setenv("PATCH_ROOT_DIR", originalRootDir) // Restore original value when done
+	os.Setenv("PATCH_ROOT_DIR", tempDir)
+
 	// Create original content
 	originalContent := `This is a test file for patching.
 It contains multiple lines of text.
@@ -25,7 +29,7 @@ This line will be modified.
 This line will be removed.
 This is the last line of the file.`
 
-	err := ioutil.WriteFile(testFilePath, []byte(originalContent), 0644)
+	err := os.WriteFile(testFilePath, []byte(originalContent), 0644)
 	if err != nil {
 		log.Printf("Failed to create test file: %v", err)
 		return err
@@ -57,23 +61,42 @@ This is the last line of the file.`
 	testCases := []struct {
 		name      string
 		arguments map[string]interface{}
+		envVars   map[string]string
 	}{
 		{
-			name: "Dry run patch",
+			name: "Dry run patch with env var",
 			arguments: map[string]interface{}{
 				"patch_content":    patchContent,
 				"target_directory": tempDir,
 				"strip_level":      0.0,
 				"dry_run":          true,
 			},
+			envVars: map[string]string{
+				"PATCH_ROOT_DIR": tempDir,
+			},
 		},
 		{
-			name: "Apply patch",
+			name: "Apply patch with env var",
 			arguments: map[string]interface{}{
 				"patch_content":    patchContent,
 				"target_directory": tempDir,
 				"strip_level":      0.0,
 				"dry_run":          false,
+			},
+			envVars: map[string]string{
+				"PATCH_ROOT_DIR": tempDir,
+			},
+		},
+		{
+			name: "Apply patch with different root dir",
+			arguments: map[string]interface{}{
+				"patch_content":    patchContent,
+				"target_directory": tempDir,
+				"strip_level":      0.0,
+				"dry_run":          false,
+			},
+			envVars: map[string]string{
+				"PATCH_ROOT_DIR": ".",
 			},
 		},
 	}
@@ -81,6 +104,11 @@ This is the last line of the file.`
 	// Run test cases
 	for _, tc := range testCases {
 		log.Printf("Running patch test: %s", tc.name)
+
+		// Set environment variables for this test case
+		for key, value := range tc.envVars {
+			os.Setenv(key, value)
+		}
 
 		callReq := mcp.CallToolRequest{}
 		callReq.Params.Name = "patch"
@@ -103,7 +131,7 @@ This is the last line of the file.`
 	}
 
 	// Read the modified file to show changes
-	modifiedContent, err := ioutil.ReadFile(testFilePath)
+	modifiedContent, err := os.ReadFile(testFilePath)
 	if err != nil {
 		log.Printf("Failed to read modified file: %v", err)
 		return err

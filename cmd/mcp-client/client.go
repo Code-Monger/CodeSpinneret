@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/Code-Monger/CodeSpinneret/cmd/mcp-client/tools"
 	"github.com/mark3labs/mcp-go/client"
@@ -106,6 +107,11 @@ func (c *Client) listResourcesAndTools(ctx context.Context) (*mcp.ListResourcesR
 
 // testTool tests the specified tool
 func (c *Client) testTool(ctx context.Context, testTool string, toolsResult *mcp.ListToolsResult) error {
+	// Special case for "all" - test all available tools
+	if testTool == "all" {
+		return c.testAllTools(ctx, toolsResult)
+	}
+
 	// Check if the tool is available
 	found := false
 	for _, tool := range toolsResult.Tools {
@@ -149,6 +155,79 @@ func (c *Client) testTool(ctx context.Context, testTool string, toolsResult *mcp
 	default:
 		return fmt.Errorf("unknown tool: %s", testTool)
 	}
+}
+
+// testAllTools tests all available tools
+func (c *Client) testAllTools(ctx context.Context, toolsResult *mcp.ListToolsResult) error {
+	log.Printf("Testing all available tools...")
+
+	// Define the order of tools to test
+	allTools := []string{
+		"calculator",
+		"filesearch",
+		"cmdexec",
+		"searchreplace",
+		"screenshot",
+		"websearch",
+		"webfetch",
+		"rag",
+		"codeanalysis",
+		"patch",
+		"stats",
+	}
+
+	// Track overall statistics
+	startTime := time.Now()
+	var successCount, failureCount int
+
+	// Test each tool
+	for _, toolName := range allTools {
+		// Check if the tool is available
+		available := false
+		for _, tool := range toolsResult.Tools {
+			if tool.Name == toolName {
+				available = true
+				break
+			}
+		}
+
+		if !available {
+			log.Printf("Skipping %s (not available on server)", toolName)
+			continue
+		}
+
+		// Create a separator for better readability
+		log.Printf("\n%s\n=== TESTING %s ===\n%s\n",
+			"------------------------------------------------",
+			toolName,
+			"------------------------------------------------")
+
+		// Test the tool
+		toolStartTime := time.Now()
+		err := c.testTool(ctx, toolName, toolsResult)
+		toolDuration := time.Since(toolStartTime)
+
+		if err != nil {
+			log.Printf("❌ %s test FAILED in %v: %v", toolName, toolDuration, err)
+			failureCount++
+		} else {
+			log.Printf("✅ %s test PASSED in %v", toolName, toolDuration)
+			successCount++
+		}
+	}
+
+	// Print summary
+	totalDuration := time.Since(startTime)
+	log.Printf("\n%s\n=== TEST SUMMARY ===\n%s",
+		"================================================",
+		"================================================")
+	log.Printf("Total tools tested: %d", successCount+failureCount)
+	log.Printf("Successful tests: %d", successCount)
+	log.Printf("Failed tests: %d", failureCount)
+	log.Printf("Total duration: %v", totalDuration)
+	log.Printf("================================================")
+
+	return nil
 }
 
 // readServerInfoIfAvailable reads the server info resource if available
