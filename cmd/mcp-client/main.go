@@ -18,7 +18,7 @@ import (
 var (
 	serverURL   = flag.String("server", "http://localhost:8080", "MCP server URL")
 	timeoutSecs = flag.Int("timeout", 60, "Client timeout in seconds")
-	testTool    = flag.String("tool", "calculator", "Tool to test (calculator, filesearch, cmdexec, searchreplace)")
+	testTool    = flag.String("tool", "calculator", "Tool to test (calculator, filesearch, cmdexec, searchreplace, screenshot, websearch)")
 )
 
 func main() {
@@ -154,6 +154,36 @@ func main() {
 			testSearchReplace(signalCtx, sseClient)
 		} else {
 			log.Println("Search replace tool not found on server")
+		}
+	case "screenshot":
+		found := false
+		for _, tool := range toolsResult.Tools {
+			if tool.Name == "screenshot" {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			log.Println("Testing screenshot tool...")
+			testScreenshot(signalCtx, sseClient)
+		} else {
+			log.Println("Screenshot tool not found on server")
+		}
+	case "websearch":
+		found := false
+		for _, tool := range toolsResult.Tools {
+			if tool.Name == "websearch" {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			log.Println("Testing web search tool...")
+			testWebSearch(signalCtx, sseClient)
+		} else {
+			log.Println("Web search tool not found on server")
 		}
 	}
 
@@ -448,4 +478,116 @@ The end of the test file.`
 	}
 
 	log.Printf("Final file content after modifications:\n%s", string(modifiedContent))
+}
+
+// testScreenshot tests the screenshot tool with various operations
+func testScreenshot(ctx context.Context, c client.MCPClient) {
+	// Define test cases
+	testCases := []struct {
+		name      string
+		arguments map[string]interface{}
+	}{
+		{
+			name: "Full screen screenshot",
+			arguments: map[string]interface{}{
+				"area":   "full",
+				"format": "png",
+			},
+		},
+		{
+			name: "Region screenshot",
+			arguments: map[string]interface{}{
+				"area":   "region",
+				"x":      100.0,
+				"y":      100.0,
+				"width":  400.0,
+				"height": 300.0,
+				"format": "png",
+			},
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		log.Printf("Running screenshot test: %s", tc.name)
+
+		callReq := mcp.CallToolRequest{}
+		callReq.Params.Name = "screenshot"
+		callReq.Params.Arguments = tc.arguments
+
+		result, err := c.CallTool(ctx, callReq)
+		if err != nil {
+			log.Printf("Failed to call screenshot: %v", err)
+			continue
+		}
+
+		if len(result.Content) > 0 {
+			for i, content := range result.Content {
+				switch content.(type) {
+				case mcp.TextContent:
+					textContent := content.(mcp.TextContent)
+					log.Printf("Screenshot result (text):\n%s", textContent.Text)
+				case mcp.ImageContent:
+					log.Printf("Screenshot result contains image data (content item %d)", i)
+				default:
+					log.Printf("Screenshot result contains unknown content type: %T", content)
+				}
+			}
+		}
+
+		// Add a small delay between tests
+		time.Sleep(1 * time.Second)
+	}
+}
+
+// testWebSearch tests the web search tool with various queries
+func testWebSearch(ctx context.Context, c client.MCPClient) {
+	// Define test cases
+	testCases := []struct {
+		name      string
+		arguments map[string]interface{}
+	}{
+		{
+			name: "Basic search",
+			arguments: map[string]interface{}{
+				"query":       "golang programming",
+				"num_results": 5.0,
+				"engine":      "duckduckgo",
+				"safe_search": true,
+			},
+		},
+		{
+			name: "Alternative search engine",
+			arguments: map[string]interface{}{
+				"query":       "artificial intelligence",
+				"num_results": 3.0,
+				"engine":      "bing",
+				"safe_search": true,
+			},
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		log.Printf("Running web search test: %s", tc.name)
+
+		callReq := mcp.CallToolRequest{}
+		callReq.Params.Name = "websearch"
+		callReq.Params.Arguments = tc.arguments
+
+		result, err := c.CallTool(ctx, callReq)
+		if err != nil {
+			log.Printf("Failed to call websearch: %v", err)
+			continue
+		}
+
+		if len(result.Content) > 0 {
+			if textContent, ok := result.Content[0].(mcp.TextContent); ok {
+				log.Printf("Web search result:\n%s", textContent.Text)
+			}
+		}
+
+		// Add a small delay between tests
+		time.Sleep(1 * time.Second)
+	}
 }

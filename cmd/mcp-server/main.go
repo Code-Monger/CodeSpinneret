@@ -14,8 +14,10 @@ import (
 	"github.com/Code-Monger/CodeSpinneret/pkg/calculator"
 	"github.com/Code-Monger/CodeSpinneret/pkg/cmdexec"
 	"github.com/Code-Monger/CodeSpinneret/pkg/filesearch"
+	"github.com/Code-Monger/CodeSpinneret/pkg/screenshot"
 	"github.com/Code-Monger/CodeSpinneret/pkg/searchreplace"
 	"github.com/Code-Monger/CodeSpinneret/pkg/serverinfo"
+	"github.com/Code-Monger/CodeSpinneret/pkg/websearch"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -52,6 +54,8 @@ func main() {
 	filesearch.RegisterFileSearch(mcpServer)
 	cmdexec.RegisterCommandExecution(mcpServer)
 	searchreplace.RegisterSearchReplace(mcpServer)
+	screenshot.RegisterScreenshot(mcpServer)
+	websearch.RegisterWebSearch(mcpServer)
 
 	// Create the SSE server
 	baseURLValue := *baseURL

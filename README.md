@@ -113,6 +113,8 @@ Both the server and client support various command-line flags for configuration:
 - **File Search**: Searches for files based on various criteria like name patterns, content, size, and modification time
 - **Command Execution**: Executes commands on the system, such as running scripts, compiling code, or starting applications
 - **Search Replace**: Finds and replaces text in files, with support for regular expressions and batch operations
+- **Screenshot**: Takes screenshots of the screen, windows, or specific regions
+- **Web Search**: Performs web searches to find information online, allowing AI models to access up-to-date information
 
 ### Resources
 
