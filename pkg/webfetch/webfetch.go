@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -231,8 +232,38 @@ func removeImages(content string) string {
 	return result
 }
 
-// stripHTML removes all HTML tags from content
+// stripHTML removes all HTML tags and CSS styles from content
 func stripHTML(content string) string {
+	// Create a reader from the HTML content
+	reader := strings.NewReader(content)
+
+	// Parse the HTML document
+	doc, err := goquery.NewDocumentFromReader(reader)
+	if err != nil {
+		// If parsing fails, fall back to the simple method
+		return simpleStripHTML(content)
+	}
+
+	// Remove all style tags
+	doc.Find("style").Remove()
+
+	// Remove all inline styles
+	doc.Find("[style]").RemoveAttr("style")
+
+	// Remove all link tags with rel="stylesheet"
+	doc.Find("link[rel='stylesheet']").Remove()
+
+	// Get the text content
+	text := doc.Text()
+
+	// Clean up the text
+	text = cleanText(text)
+
+	return text
+}
+
+// simpleStripHTML is a fallback method if goquery parsing fails
+func simpleStripHTML(content string) string {
 	var result strings.Builder
 	inTag := false
 
@@ -247,8 +278,13 @@ func stripHTML(content string) string {
 		}
 	}
 
+	return cleanText(result.String())
+}
+
+// cleanText cleans up the text by removing extra whitespace
+func cleanText(text string) string {
 	// Replace multiple spaces with a single space
-	output := result.String()
+	output := text
 	for strings.Contains(output, "  ") {
 		output = strings.ReplaceAll(output, "  ", " ")
 	}

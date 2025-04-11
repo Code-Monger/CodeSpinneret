@@ -55,19 +55,19 @@ func main() {
 int calculateSum(int a, int b);
 
 int main() {
-    int result = calculateSum(10, 20);
-    std::cout << "Result: " << result << std::endl;
-    return 0;
+	   int result = calculateSum(10, 20);
+	   std::cout << "Result: " << result << std::endl;
+	   return 0;
 }
 
 // Function implementation
 int calculateSum(int a, int b) {
-    return a + b;
+	   return a + b;
 }
 `,
 		"test.js": `// JavaScript test file
 function calculateSum(a, b) {
-    return a + b;
+	   return a + b;
 }
 
 // Test the function
@@ -76,12 +76,26 @@ console.log("Result:", result);
 `,
 		"test.py": `# Python test file
 def calculateSum(a, b):
-    """Calculate the sum of two numbers."""
-    return a + b
+	   """Calculate the sum of two numbers."""
+	   return a + b
 
 # Test the function
 result = calculateSum(5, 10)
 print("Result:", result)
+`,
+		"test_comments.go": `package main
+
+// This is a comment above the function
+// It should be replaced when the function is replaced
+func calculateSumWithComments(a, b int) int {
+	// This is a comment inside the function
+	return a + b
+}
+
+func main() {
+	result := calculateSumWithComments(10, 20)
+	fmt.Println("Result:", result)
+}
 `,
 	}
 
@@ -168,8 +182,8 @@ func calculateSum(a, b int) int {
 				"language":      "C/C++",
 				"replacement_content": `// Function implementation with bonus
 int calculateSum(int a, int b) {
-    int bonus = 5;
-    return a + b + bonus;
+	   int bonus = 5;
+	   return a + b + bonus;
 }`,
 			},
 		},
@@ -181,6 +195,40 @@ int calculateSum(int a, int b) {
 				"file_path":         filepath.Join(testDir, "test.cpp"),
 				"language":          "C/C++",
 				"include_prototype": true,
+			},
+		},
+		{
+			name: "Get function with comments",
+			arguments: map[string]interface{}{
+				"operation":     "get",
+				"function_name": "calculateSumWithComments",
+				"file_path":     filepath.Join(testDir, "test_comments.go"),
+				"language":      "Go",
+			},
+		},
+		{
+			name: "Replace function with comments",
+			arguments: map[string]interface{}{
+				"operation":     "replace",
+				"function_name": "calculateSumWithComments",
+				"file_path":     filepath.Join(testDir, "test_comments.go"),
+				"language":      "Go",
+				"replacement_content": `// This is a NEW comment above the function
+// The old comment should be gone
+func calculateSumWithComments(a, b int) int {
+	// This is a new comment inside the function
+	bonus := 5
+	return a + b + bonus
+}`,
+			},
+		},
+		{
+			name: "Get replaced function with comments",
+			arguments: map[string]interface{}{
+				"operation":     "get",
+				"function_name": "calculateSumWithComments",
+				"file_path":     filepath.Join(testDir, "test_comments.go"),
+				"language":      "Go",
 			},
 		},
 	}

@@ -2,9 +2,9 @@ package rag
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -34,13 +34,26 @@ func queryRepository(repoPath string, query string, numResults int) (*QueryResul
 	// 2. Search the vector database for similar snippets
 	// 3. Return the most similar snippets
 
-	// For demonstration purposes, we'll just return some mock results
+	// Create a result structure
 	result := &QueryResult{
 		Results: []CodeSnippet{},
 	}
 
-	// Find some random files to use as mock results
-	var files []string
+	// Normalize the query for better matching
+	normalizedQuery := strings.ToLower(query)
+	queryTerms := strings.Fields(normalizedQuery)
+
+	// Structure to hold file matches
+	type FileMatch struct {
+		Path      string
+		Content   string
+		Score     float64
+		MatchInfo string
+	}
+
+	var matches []FileMatch
+
+	// Walk through the repository to find matching files
 	err = filepath.Walk(repoPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -56,8 +69,35 @@ func queryRepository(repoPath string, query string, numResults int) (*QueryResul
 
 		// Only include source code files
 		ext := filepath.Ext(path)
-		if isSourceCodeFile(ext) {
-			files = append(files, path)
+		if !isSourceCodeFile(ext) {
+			return nil
+		}
+
+		// Calculate a base score based on the file path
+		relPath, _ := filepath.Rel(repoPath, path)
+		pathScore := calculatePathScore(relPath, normalizedQuery, queryTerms)
+
+		// Read the file content
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil // Skip this file if we can't read it
+		}
+
+		contentStr := string(content)
+		contentScore := calculateContentScore(contentStr, normalizedQuery, queryTerms)
+
+		// Calculate total score
+		totalScore := (pathScore + contentScore) / 2.0
+
+		// Only include files with a minimum score
+		if totalScore > 0.1 {
+			matchInfo := fmt.Sprintf("Path score: %.2f, Content score: %.2f", pathScore, contentScore)
+			matches = append(matches, FileMatch{
+				Path:      path,
+				Content:   contentStr,
+				Score:     totalScore,
+				MatchInfo: matchInfo,
+			})
 		}
 
 		return nil
@@ -67,38 +107,29 @@ func queryRepository(repoPath string, query string, numResults int) (*QueryResul
 	}
 
 	// If no files found, return empty result
-	if len(files) == 0 {
+	if len(matches) == 0 {
 		result.TimeTaken = time.Since(startTime)
 		return result, nil
 	}
 
-	// Seed random number generator
-	rand.Seed(time.Now().UnixNano())
+	// Sort matches by score (highest first)
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].Score > matches[j].Score
+	})
 
-	// Generate mock results
-	for i := 0; i < min(numResults, len(files)); i++ {
-		// Pick a random file
-		fileIndex := rand.Intn(len(files))
-		filePath := files[fileIndex]
+	// Take the top N results
+	for i := 0; i < min(numResults, len(matches)); i++ {
+		match := matches[i]
 
-		// Read the file
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			continue
-		}
-
-		// Extract a snippet
-		snippet := extractSnippet(string(content), query)
+		// Extract a relevant snippet
+		snippet := extractSnippet(match.Content, query)
 
 		// Add to results
 		result.Results = append(result.Results, CodeSnippet{
-			FilePath:   filePath,
+			FilePath:   match.Path,
 			Snippet:    snippet,
-			Similarity: 0.5 + rand.Float64()*0.5, // Random similarity between 0.5 and 1.0
+			Similarity: match.Score,
 		})
-
-		// Remove the file from the list to avoid duplicates
-		files = append(files[:fileIndex], files[fileIndex+1:]...)
 	}
 
 	result.TimeTaken = time.Since(startTime)
@@ -148,6 +179,88 @@ func isSourceCodeFile(ext string) bool {
 // max returns the maximum of two integers
 func max(a, b int) int {
 	if a > b {
+		return a
+	}
+	return b
+}
+
+// calculatePathScore calculates a score based on how well the file path matches the query
+func calculatePathScore(path string, normalizedQuery string, queryTerms []string) float64 {
+	// Normalize the path
+	normalizedPath := strings.ToLower(path)
+
+	// Direct match with the full query
+	if strings.Contains(normalizedPath, normalizedQuery) {
+		return 1.0
+	}
+
+	// Check for matches with individual query terms
+	matchCount := 0
+	for _, term := range queryTerms {
+		if len(term) < 3 {
+			continue // Skip very short terms
+		}
+		if strings.Contains(normalizedPath, term) {
+			matchCount++
+		}
+	}
+
+	// Calculate score based on the percentage of query terms found in the path
+	if len(queryTerms) > 0 {
+		return float64(matchCount) / float64(len(queryTerms))
+	}
+
+	return 0.0
+}
+
+// calculateContentScore calculates a score based on how well the file content matches the query
+func calculateContentScore(content string, normalizedQuery string, queryTerms []string) float64 {
+	// Normalize the content
+	normalizedContent := strings.ToLower(content)
+
+	// Count occurrences of the full query
+	fullQueryCount := strings.Count(normalizedContent, normalizedQuery)
+
+	// If the full query appears multiple times, this is a strong match
+	if fullQueryCount > 0 {
+		// Scale the score based on the number of occurrences, with diminishing returns
+		return minFloat(1.0, 0.7+0.3*float64(min(fullQueryCount, 10))/10.0)
+	}
+
+	// Count occurrences of individual query terms
+	termMatches := 0
+	totalTerms := len(queryTerms)
+
+	if totalTerms == 0 {
+		return 0.0
+	}
+
+	for _, term := range queryTerms {
+		// Skip very short terms (less than 3 characters)
+		if len(term) < 3 {
+			totalTerms--
+			continue
+		}
+
+		// Count occurrences of this term
+		termCount := strings.Count(normalizedContent, term)
+		if termCount > 0 {
+			termMatches++
+		}
+	}
+
+	// Adjust for the case where all terms were too short
+	if totalTerms == 0 {
+		return 0.0
+	}
+
+	// Calculate score based on the percentage of query terms found in the content
+	return float64(termMatches) / float64(totalTerms)
+}
+
+// minFloat returns the minimum of two float64 values
+func minFloat(a, b float64) float64 {
+	if a < b {
 		return a
 	}
 	return b

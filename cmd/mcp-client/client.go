@@ -162,6 +162,8 @@ func (c *Client) testTool(ctx context.Context, testTool string, toolsResult *mcp
 		return tools.TestSpellCheck(ctx, c.mcpClient)
 	case "stats":
 		return tools.TestStats(ctx, c.mcpClient)
+	case "workspace":
+		return tools.TestWorkspace(ctx, c.mcpClient)
 	default:
 		return fmt.Errorf("unknown tool: %s", testTool)
 	}
@@ -173,6 +175,7 @@ func (c *Client) testAllTools(ctx context.Context, toolsResult *mcp.ListToolsRes
 
 	// Define the order of tools to test
 	allTools := []string{
+		"workspace", // Test workspace first as other tools may depend on it
 		"calculator",
 		"filesearch",
 		"cmdexec",

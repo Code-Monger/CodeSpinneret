@@ -26,6 +26,26 @@ func HandleScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 		area = "full" // Default to full screen
 	}
 
+	// Validate area parameter
+	if area != "full" && area != "window" && area != "region" {
+		return nil, fmt.Errorf("invalid area parameter: %s. Must be 'full', 'window', or 'region'", area)
+	}
+
+	// If area is "region", validate that width and height are provided
+	if area == "region" {
+		if _, ok := arguments["width"].(float64); !ok {
+			return nil, fmt.Errorf("width parameter is required for region capture")
+		}
+		if _, ok := arguments["height"].(float64); !ok {
+			return nil, fmt.Errorf("height parameter is required for region capture")
+		}
+	}
+
+	// If area is "window" and we're on Windows, provide a clear error message
+	if area == "window" && runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("capturing specific windows by title is not supported on Windows")
+	}
+
 	// Extract window title (for window area)
 	windowTitle, _ := arguments["window_title"].(string)
 

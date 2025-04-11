@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
+	"github.com/Code-Monger/CodeSpinneret/pkg/workspace"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -34,10 +35,13 @@ func HandlePatch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 		targetDir = "." // Default to current directory
 	}
 
-	// Get root directory from environment variable
-	rootDir := os.Getenv(EnvPatchRootDir)
+	// Extract session ID
+	sessionID, _ := arguments["session_id"].(string)
+
+	// Get root directory from workspace
+	rootDir := workspace.GetRootDir(sessionID)
 	if rootDir == "" {
-		rootDir = targetDir // Default to target directory if env var not set
+		rootDir = targetDir // Default to target directory if workspace not set
 	}
 
 	// Extract strip level
@@ -252,6 +256,10 @@ func parsePatch(patchContent string) ([]FilePatch, error) {
 
 				// Process hunk content
 				j := i + 1
+
+				// Keep track of context lines
+				var contextLines []string
+
 				for j < len(lines) {
 					contentLine := lines[j]
 
@@ -271,11 +279,18 @@ func parsePatch(patchContent string) ([]FilePatch, error) {
 						hunk.Removed = append(hunk.Removed, contentLine[1:])
 					} else if strings.HasPrefix(contentLine, " ") {
 						// Context line
-						hunk.Context = append(hunk.Context, contentLine[1:])
+						contextLine := contentLine[1:]
+						contextLines = append(contextLines, contextLine)
 					}
 
 					j++
 				}
+
+				// Set all context lines
+				hunk.Context = contextLines
+
+				// Set the context lines
+				hunk.Context = contextLines
 
 				// Update the line index
 				i = j - 1
@@ -336,17 +351,87 @@ func applyHunks(content string, hunks []Hunk) (string, int, int) {
 
 // findHunkLocation finds the location of a hunk in the file content
 func findHunkLocation(lines []string, hunk Hunk) int {
-	// Try to find the removed lines in the file
-	for i := 0; i < len(lines); i++ {
-		// Check if we have enough lines left to match
-		if i+len(hunk.Removed) > len(lines) {
-			continue
+	// If there are no removed lines, we can't find the location
+	if len(hunk.Removed) == 0 {
+		// If there are context lines, try to find them
+		if len(hunk.Context) > 0 {
+			return findContextLocation(lines, hunk.Context)
+		}
+		return -1
+	}
+
+	// First try to find the exact match with context lines
+	if len(hunk.Context) > 0 {
+		// Create a pattern with context lines and removed lines
+		pattern := make([]string, 0, len(hunk.Context)+len(hunk.Removed))
+
+		// Add all context and removed lines in the correct order
+		contextIndex := 0
+		removedIndex := 0
+		inRemovedSection := false
+
+		// Process context lines that come before removed lines
+		for contextIndex < len(hunk.Context) && !inRemovedSection {
+			// Check if this context line is actually a removed line
+			if removedIndex < len(hunk.Removed) && hunk.Context[contextIndex] == hunk.Removed[removedIndex] {
+				inRemovedSection = true
+				break
+			}
+
+			pattern = append(pattern, hunk.Context[contextIndex])
+			contextIndex++
 		}
 
-		// Check if all removed lines match
+		// Add all removed lines
+		pattern = append(pattern, hunk.Removed...)
+
+		// Add remaining context lines that come after removed lines
+		for contextIndex < len(hunk.Context) {
+			pattern = append(pattern, hunk.Context[contextIndex])
+			contextIndex++
+		}
+
+		// Try to find the pattern in the file
+		for i := 0; i <= len(lines)-len(pattern); i++ {
+			match := true
+			for j := 0; j < len(pattern); j++ {
+				if i+j >= len(lines) || lines[i+j] != pattern[j] {
+					match = false
+					break
+				}
+			}
+
+			if match {
+				// Return the position where removed lines start
+				return i + (len(pattern) - len(hunk.Removed) - (len(hunk.Context) - contextIndex))
+			}
+		}
+	}
+
+	// If we couldn't find the pattern with context, try just the removed lines
+	for i := 0; i <= len(lines)-len(hunk.Removed); i++ {
 		match := true
 		for j := 0; j < len(hunk.Removed); j++ {
-			if lines[i+j] != hunk.Removed[j] {
+			if i+j >= len(lines) || lines[i+j] != hunk.Removed[j] {
+				match = false
+				break
+			}
+		}
+
+		if match {
+			return i
+		}
+	}
+
+	return -1
+}
+
+// findContextLocation finds the location of context lines in the file content
+func findContextLocation(lines []string, context []string) int {
+	for i := 0; i <= len(lines)-len(context); i++ {
+		match := true
+		for j := 0; j < len(context); j++ {
+			if i+j >= len(lines) || lines[i+j] != context[j] {
 				match = false
 				break
 			}
@@ -384,13 +469,16 @@ func applyHunk(lines []string, hunk Hunk, location int) []string {
 func RegisterPatch(mcpServer *server.MCPServer) {
 	// Create the tool definition
 	patchTool := mcp.NewTool("patch",
-		mcp.WithDescription("Applies patches to files using the standard unified diff format. Supports both file-specific and directory-wide patching with configurable path handling. Uses the PATCH_ROOT_DIR environment variable for consistent relative path resolution across tools. Provides detailed reporting of applied and failed hunks, with dry-run capability for safe testing. Ideal for code modifications, bug fixes, and implementing changes from external sources."),
+		mcp.WithDescription("Applies patches to files using the standard unified diff format. Supports both file-specific and directory-wide patching with configurable path handling. Uses the workspace session for consistent relative path resolution across tools. Provides detailed reporting of applied and failed hunks, with dry-run capability for safe testing. Ideal for code modifications, bug fixes, and implementing changes from external sources."),
 		mcp.WithString("patch_content",
 			mcp.Description("The content of the patch file in unified diff format, containing the changes to apply to one or more files"),
 			mcp.Required(),
 		),
 		mcp.WithString("target_directory",
 			mcp.Description("The directory where the files to be patched are located (absolute or relative path, default: current directory)"),
+		),
+		mcp.WithString("session_id",
+			mcp.Description("Session ID to use for resolving relative paths"),
 		),
 		mcp.WithNumber("strip_level",
 			mcp.Description("The number of leading directories to strip from file paths in the patch, useful for applying patches created in different directory structures (default: 0)"),

@@ -29,6 +29,7 @@ import (
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/Code-Monger/CodeSpinneret/pkg/webfetch"
 	"github.com/Code-Monger/CodeSpinneret/pkg/websearch"
+	"github.com/Code-Monger/CodeSpinneret/pkg/workspace"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -67,6 +68,7 @@ func main() {
 	}
 
 	// Register tools and resources
+	workspace.RegisterWorkspace(mcpServer) // Register workspace first as other tools may depend on it
 	calculator.RegisterCalculator(mcpServer)
 	serverinfo.RegisterServerInfo(mcpServer)
 	filesearch.RegisterFileSearch(mcpServer)

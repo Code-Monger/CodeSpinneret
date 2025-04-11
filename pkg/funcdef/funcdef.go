@@ -572,13 +572,34 @@ func GetFunctionDefinition(filePath, functionName string, language Language, inc
 				endLine = j
 			}
 
-			// Extract the function content
-			functionContent := strings.Join(lines[startLine:endLine+1], "\n")
+			// Find comments above the function
+			commentStartLine := startLine
+			for commentStartLine > 0 {
+				prevLine := strings.TrimSpace(lines[commentStartLine-1])
+				if strings.HasPrefix(prevLine, "//") || strings.HasPrefix(prevLine, "/*") ||
+					(commentStartLine > 1 && strings.HasPrefix(lines[commentStartLine-2], "/*") && !strings.Contains(prevLine, "*/")) {
+					// This is a comment line, continue searching upward
+					commentStartLine--
+				} else {
+					// This is not a comment line, stop searching
+					break
+				}
+			}
+
+			// Extract the function content including comments above
+			var functionContent string
+			if commentStartLine < startLine {
+				// Include comments above the function
+				functionContent = strings.Join(lines[commentStartLine:endLine+1], "\n")
+			} else {
+				// No comments above or they were not detected
+				functionContent = strings.Join(lines[startLine:endLine+1], "\n")
+			}
 
 			def := FunctionDefinition{
 				FilePath:    filePath,
 				Language:    language.Name,
-				StartLine:   startLine + 1,
+				StartLine:   commentStartLine + 1, // Use the comment start line if available
 				EndLine:     endLine + 1,
 				IsPrototype: false,
 				Content:     functionContent,
@@ -630,8 +651,24 @@ func ReplaceFunctionDefinition(filePath, functionName string, language Language,
 			lines[def.StartLine-1] = replacementContent
 		} else {
 			// For implementations, replace the entire function
+
+			// Find comments above the function
+			commentStartLine := def.StartLine - 1
+			for commentStartLine > 0 {
+				prevLine := strings.TrimSpace(lines[commentStartLine-1])
+				if strings.HasPrefix(prevLine, "//") || strings.HasPrefix(prevLine, "/*") ||
+					(commentStartLine > 1 && strings.HasPrefix(lines[commentStartLine-2], "/*") && !strings.Contains(prevLine, "*/")) {
+					// This is a comment line, continue searching upward
+					commentStartLine--
+				} else {
+					// This is not a comment line, stop searching
+					break
+				}
+			}
+
+			// Replace the function and its comments with the new content
 			newLines := strings.Split(replacementContent, "\n")
-			lines = append(lines[:def.StartLine-1], append(newLines, lines[def.EndLine:]...)...)
+			lines = append(lines[:commentStartLine], append(newLines, lines[def.EndLine:]...)...)
 		}
 	}
 

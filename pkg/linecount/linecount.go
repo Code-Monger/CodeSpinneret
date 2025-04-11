@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
+	"github.com/Code-Monger/CodeSpinneret/pkg/workspace"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -42,16 +43,18 @@ func HandleLineCount(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	if countCharsVal, ok := arguments["count_chars"].(bool); ok {
 		countChars = countCharsVal
 	}
-
 	// Check if the file path is absolute
 	var fullPath string
 	if filepath.IsAbs(filePath) {
 		fullPath = filePath
 	} else {
-		// Get root directory from environment variable
-		rootDir := os.Getenv(EnvRootDir)
+		// Extract session ID
+		sessionID, _ := arguments["session_id"].(string)
+
+		// Get root directory from workspace
+		rootDir := workspace.GetRootDir(sessionID)
 		if rootDir == "" {
-			rootDir = "." // Default to current directory if env var not set
+			rootDir = "." // Default to current directory if workspace not set
 		}
 
 		// Join the root directory and file path
@@ -147,10 +150,13 @@ func countFileStats(filePath string, countLines, countWords, countChars bool) (*
 func RegisterLineCount(mcpServer *server.MCPServer) {
 	// Create the tool definition
 	lineCountTool := mcp.NewTool("linecount",
-		mcp.WithDescription("Counts lines, words, and characters in a file, similar to the Unix 'wc' command. Provides detailed statistics about file content with configurable counting options. Supports both absolute and relative file paths, with automatic resolution using the PATCH_ROOT_DIR environment variable for consistent path handling across tools. Useful for code analysis, documentation metrics, and content evaluation."),
+		mcp.WithDescription("Counts lines, words, and characters in a file, similar to the Unix 'wc' command. Provides detailed statistics about file content with configurable counting options. Supports both absolute and relative file paths, with automatic resolution using the workspace session for consistent path handling across tools. Useful for code analysis, documentation metrics, and content evaluation."),
 		mcp.WithString("file_path",
 			mcp.Description("The path of the file to count (absolute or relative to working directory)"),
 			mcp.Required(),
+		),
+		mcp.WithString("session_id",
+			mcp.Description("Session ID to use for resolving relative paths"),
 		),
 		mcp.WithBoolean("count_lines",
 			mcp.Description("Whether to count the number of lines in the file (default: true)"),
