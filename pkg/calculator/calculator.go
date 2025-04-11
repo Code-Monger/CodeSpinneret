@@ -4,13 +4,18 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
+	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
 // HandleCalculator is the handler function for the calculator tool
 func HandleCalculator(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Record the start time for stats
+	startTime := time.Now()
+
 	arguments := request.Params.Arguments
 
 	// Extract operation
@@ -54,37 +59,42 @@ func HandleCalculator(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 	}
 
 	// Perform the calculation
-	var result float64
+	var calcResult float64
 	var resultText string
 
 	switch operation {
 	case "add":
-		result = a + b
-		resultText = fmt.Sprintf("The sum of %g and %g is %g", a, b, result)
+		calcResult = a + b
+		resultText = fmt.Sprintf("The sum of %g and %g is %g", a, b, calcResult)
 	case "subtract":
-		result = a - b
-		resultText = fmt.Sprintf("The difference of %g and %g is %g", a, b, result)
+		calcResult = a - b
+		resultText = fmt.Sprintf("The difference of %g and %g is %g", a, b, calcResult)
 	case "multiply":
-		result = a * b
-		resultText = fmt.Sprintf("The product of %g and %g is %g", a, b, result)
+		calcResult = a * b
+		resultText = fmt.Sprintf("The product of %g and %g is %g", a, b, calcResult)
 	case "divide":
 		if b == 0 {
 			return nil, fmt.Errorf("division by zero is not allowed")
 		}
-		result = a / b
-		resultText = fmt.Sprintf("The quotient of %g and %g is %g", a, b, result)
+		calcResult = a / b
+		resultText = fmt.Sprintf("The quotient of %g and %g is %g", a, b, calcResult)
 	default:
 		return nil, fmt.Errorf("unsupported operation: %s", operation)
 	}
 
-	return &mcp.CallToolResult{
+	toolResult := &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.TextContent{
 				Type: "text",
 				Text: resultText,
 			},
 		},
-	}, nil
+	}
+
+	// Record the usage stats
+	stats.RecordToolUsage("calculator", startTime, toolResult)
+
+	return toolResult, nil
 }
 
 // RegisterCalculator registers the calculator tool with the MCP server

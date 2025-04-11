@@ -118,6 +118,7 @@ Both the server and client support various command-line flags for configuration:
 - **RAG (Retrieval Augmented Generation)**: Provides AI-powered code assistance by retrieving relevant code snippets and generating contextual responses
 - **Code Analysis**: Analyzes code to provide insights, metrics, and suggestions for improvement
 - **Patch**: Applies patches to files using the standard unified diff format, supporting various options like strip level and dry run
+- **Stats**: Tracks and reports usage statistics for all MCP tools, including call counts, execution times, and estimated token savings
 
 ### Resources
 

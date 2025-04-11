@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/Code-Monger/CodeSpinneret/pkg/screenshot"
 	"github.com/Code-Monger/CodeSpinneret/pkg/searchreplace"
 	"github.com/Code-Monger/CodeSpinneret/pkg/serverinfo"
+	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/Code-Monger/CodeSpinneret/pkg/websearch"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -31,10 +33,16 @@ var (
 	serverVer    = flag.String("version", "1.0.0", "Server version")
 	timeoutSecs  = flag.Int("timeout", 300, "Server timeout in seconds")
 	instructions = flag.String("instructions", "This is a Model Context Protocol server implementation.", "Server instructions")
+	dataDir      = flag.String("data-dir", filepath.Join(".", "data"), "Directory to store data files")
 )
 
 func main() {
 	flag.Parse()
+
+	// Create data directory if it doesn't exist
+	if err := os.MkdirAll(*dataDir, 0755); err != nil {
+		log.Fatalf("Failed to create data directory: %v", err)
+	}
 
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutSecs)*time.Second)
@@ -51,6 +59,11 @@ func main() {
 		server.WithInstructions(*instructions),
 	)
 
+	// Initialize stats service
+	if err := stats.InitStatsManager(*dataDir); err != nil {
+		log.Fatalf("Failed to initialize stats manager: %v", err)
+	}
+
 	// Register tools and resources
 	calculator.RegisterCalculator(mcpServer)
 	serverinfo.RegisterServerInfo(mcpServer)
@@ -62,6 +75,11 @@ func main() {
 	rag.RegisterRAG(mcpServer)
 	codeanalysis.RegisterCodeAnalysis(mcpServer)
 	patch.RegisterPatch(mcpServer)
+
+	// Register stats tool
+	if err := stats.RegisterStats(mcpServer, *dataDir); err != nil {
+		log.Fatalf("Failed to register stats tool: %v", err)
+	}
 
 	// Create the SSE server
 	baseURLValue := *baseURL

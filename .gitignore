@@ -26,3 +26,4 @@ go.work.sum
 /.vs
 /plan.md
 /.rag-index
+/data

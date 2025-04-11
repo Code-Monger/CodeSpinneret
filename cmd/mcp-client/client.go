@@ -142,6 +142,8 @@ func (c *Client) testTool(ctx context.Context, testTool string, toolsResult *mcp
 		return tools.TestCodeAnalysis(ctx, c.mcpClient)
 	case "patch":
 		return tools.TestPatch(ctx, c.mcpClient)
+	case "stats":
+		return tools.TestStats(ctx, c.mcpClient)
 	default:
 		return fmt.Errorf("unknown tool: %s", testTool)
 	}
