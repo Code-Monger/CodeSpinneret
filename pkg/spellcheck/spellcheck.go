@@ -1,12 +1,14 @@
 package spellcheck
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -318,12 +320,357 @@ func spellCheckDirectory(dirPath, language string, recursive, checkComments, che
 
 // spellCheckFile performs spell checking on a single file
 func spellCheckFile(filePath, language string, checkComments, checkStrings, checkIdentifiers bool, dictionaryType string, customDictionary []string) ([]SpellCheckResult, error) {
+	var results []SpellCheckResult
+
+	// Determine the language if not specified
+	var lang Language
+	if language == "" {
+		ext := filepath.Ext(filePath)
+		var found bool
+		lang, found = GetLanguageByExtension(ext)
+		if !found {
+			return nil, fmt.Errorf("unsupported file extension: %s", ext)
+		}
+	} else {
+		var found bool
+		lang, found = GetLanguageByName(language)
+		if !found {
+			return nil, fmt.Errorf("unsupported language: %s", language)
+		}
+	}
+
+	// Open the file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening file: %v", err)
+	}
+	defer file.Close()
+
+	// Create a scanner to read the file
+	scanner := bufio.NewScanner(file)
+
+	// Process each line
+	lineNumber := 0
+	for scanner.Scan() {
+		lineNumber++
+		line := scanner.Text()
+
+		// Check comments if enabled
+		if checkComments {
+			// Check for single-line comments
+			commentIndex := strings.Index(line, lang.SingleLineComment)
+			if commentIndex >= 0 {
+				comment := line[commentIndex+len(lang.SingleLineComment):]
+				commentResults := checkTextForSpellingErrors(comment, lineNumber, commentIndex+len(lang.SingleLineComment), "comment", dictionaryType, customDictionary)
+				for _, result := range commentResults {
+					result.FilePath = filePath
+					result.Context = line
+					results = append(results, result)
+				}
+			}
+		}
+
+		// Check string literals if enabled
+		if checkStrings {
+			for _, delimiter := range lang.StringDelimiters {
+				// Find all string literals in the line
+				startIndex := 0
+				for {
+					startIndex = strings.Index(line[startIndex:], delimiter)
+					if startIndex < 0 {
+						break
+					}
+
+					// Find the end of the string
+					endIndex := strings.Index(line[startIndex+len(delimiter):], delimiter)
+					if endIndex < 0 {
+						break
+					}
+
+					// Extract the string content
+					stringContent := line[startIndex+len(delimiter) : startIndex+len(delimiter)+endIndex]
+					stringResults := checkTextForSpellingErrors(stringContent, lineNumber, startIndex+len(delimiter), "string", dictionaryType, customDictionary)
+					for _, result := range stringResults {
+						result.FilePath = filePath
+						result.Context = line
+						results = append(results, result)
+					}
+
+					startIndex += len(delimiter) + endIndex + len(delimiter)
+				}
+			}
+		}
+
+		// Check identifiers if enabled
+		if checkIdentifiers {
+			// Simple regex to find identifiers (variable and function names)
+			// This is a simplified approach and would need to be more sophisticated in a real implementation
+			words := strings.Fields(line)
+			for _, word := range words {
+				// Skip if it's not a valid identifier
+				if !isValidIdentifier(word) {
+					continue
+				}
+
+				// Split camelCase, PascalCase, or snake_case identifiers into words
+				subWords := splitIdentifier(word)
+				for _, subWord := range subWords {
+					if len(subWord) > 2 && !isCommonProgrammingTerm(subWord) {
+						// Check if the word is misspelled
+						if isMisspelled(subWord, dictionaryType) && !isInCustomDictionary(subWord, customDictionary) {
+							// Find the position of the word in the line
+							wordIndex := strings.Index(line, word)
+							if wordIndex >= 0 {
+								results = append(results, SpellCheckResult{
+									FilePath:    filePath,
+									LineNumber:  lineNumber,
+									ColumnStart: wordIndex,
+									ColumnEnd:   wordIndex + len(word),
+									Word:        subWord,
+									Context:     line,
+									Type:        "identifier",
+									Suggestions: getSuggestions(subWord, dictionaryType),
+								})
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Check for scanner errors
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading file: %v", err)
+	}
+
+	return results, nil
+}
+
+// checkTextForSpellingErrors checks a text for spelling errors
+func checkTextForSpellingErrors(text string, lineNumber, columnOffset int, textType, dictionaryType string, customDictionary []string) []SpellCheckResult {
+	var results []SpellCheckResult
+
+	// Split the text into words
+	words := strings.Fields(text)
+
+	// Track the current column position
+	currentPos := columnOffset
+
+	// Check each word
+	for _, word := range words {
+		// Clean the word (remove punctuation)
+		cleanWord := cleanWord(word)
+
+		// Skip short words, numbers, and common programming terms
+		if len(cleanWord) > 2 && !isNumeric(cleanWord) && !isCommonProgrammingTerm(cleanWord) {
+			// Check if the word is misspelled
+			if isMisspelled(cleanWord, dictionaryType) && !isInCustomDictionary(cleanWord, customDictionary) {
+				// Find the position of the word in the text
+				wordIndex := strings.Index(text[currentPos-columnOffset:], word)
+				if wordIndex >= 0 {
+					wordPos := currentPos + wordIndex
+					results = append(results, SpellCheckResult{
+						LineNumber:  lineNumber,
+						ColumnStart: wordPos,
+						ColumnEnd:   wordPos + len(word),
+						Word:        cleanWord,
+						Type:        textType,
+						Suggestions: getSuggestions(cleanWord, dictionaryType),
+					})
+				}
+			}
+		}
+
+		// Move the position past this word
+		currentPos += len(word) + 1 // +1 for the space
+	}
+
+	return results
+}
+
+// cleanWord removes punctuation from a word
+func cleanWord(word string) string {
+	// Remove common punctuation
+	word = strings.Trim(word, ",.;:!?\"'()[]{}")
+	return word
+}
+
+// isValidIdentifier checks if a string is a valid identifier
+func isValidIdentifier(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+
+	// First character must be a letter or underscore
+	if !strings.ContainsRune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_", rune(s[0])) {
+		return false
+	}
+
+	// Rest can be letters, digits, or underscores
+	for _, c := range s[1:] {
+		if !strings.ContainsRune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_", c) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// isCommonProgrammingTerm checks if a word is a common programming term
+func isCommonProgrammingTerm(word string) bool {
+	// Common programming terms and abbreviations
+	programmingTerms := map[string]bool{
+		"var": true, "func": true, "int": true, "str": true, "bool": true,
+		"len": true, "fmt": true, "println": true, "printf": true, "sprintf": true,
+		"args": true, "argv": true, "argc": true, "param": true, "params": true,
+		"init": true, "exec": true, "eval": true, "impl": true, "pkg": true,
+		"lib": true, "src": true, "dest": true, "tmp": true, "temp": true,
+		"dir": true, "dirs": true, "cmd": true, "cmds": true, "env": true,
+		"config": true, "cfg": true, "ctx": true, "req": true, "res": true,
+		"err": true, "stdin": true, "stdout": true, "stderr": true,
+	}
+
+	return programmingTerms[strings.ToLower(word)]
+}
+
+// splitIdentifier splits an identifier into words based on casing
+func splitIdentifier(identifier string) []string {
+	var words []string
+
+	// Check for snake_case
+	if strings.Contains(identifier, "_") {
+		// Split by underscore
+		parts := strings.Split(identifier, "_")
+		for _, part := range parts {
+			if part != "" {
+				words = append(words, part)
+			}
+		}
+		return words
+	}
+
+	// Handle camelCase and PascalCase
+	var currentWord strings.Builder
+	for i, c := range identifier {
+		if i > 0 && unicode.IsUpper(c) {
+			// End of a word
+			if currentWord.Len() > 0 {
+				words = append(words, currentWord.String())
+				currentWord.Reset()
+			}
+		}
+		currentWord.WriteRune(c)
+	}
+
+	// Add the last word
+	if currentWord.Len() > 0 {
+		words = append(words, currentWord.String())
+	}
+
+	return words
+}
+
+// isNumeric checks if a string is a number
+func isNumeric(s string) bool {
+	for _, c := range s {
+		if !unicode.IsDigit(c) {
+			return false
+		}
+	}
+	return true
+}
+
+// isInCustomDictionary checks if a word is in the custom dictionary
+func isInCustomDictionary(word string, customDictionary []string) bool {
+	for _, dictWord := range customDictionary {
+		if strings.EqualFold(word, dictWord) {
+			return true
+		}
+	}
+	return false
+}
+
+// isMisspelled checks if a word is misspelled
+func isMisspelled(word, dictionaryType string) bool {
 	// This is a simplified implementation
 	// In a real implementation, this would use a proper spell checking library
-	// and handle comments, strings, and identifiers properly
+	// or call an external API
 
-	// For now, we'll just return an empty result
-	return []SpellCheckResult{}, nil
+	// For demo purposes, we'll just check against a small list of common words
+	// and consider any word not in this list as misspelled
+	commonWords := map[string]bool{
+		"the": true, "and": true, "that": true, "have": true, "for": true,
+		"not": true, "with": true, "you": true, "this": true, "but": true,
+		"his": true, "from": true, "they": true, "say": true, "she": true,
+		"will": true, "one": true, "all": true, "would": true, "there": true,
+		"their": true, "what": true, "out": true, "about": true, "who": true,
+		"get": true, "which": true, "when": true, "make": true, "can": true,
+		"like": true, "time": true, "just": true, "him": true, "know": true,
+		"take": true, "people": true, "into": true, "year": true, "your": true,
+		"good": true, "some": true, "could": true, "them": true, "see": true,
+		"other": true, "than": true, "then": true, "now": true, "look": true,
+		"only": true, "come": true, "its": true, "over": true, "think": true,
+		"also": true, "back": true, "after": true, "use": true, "two": true,
+		"how": true, "our": true, "work": true, "first": true, "well": true,
+		"way": true, "even": true, "new": true, "want": true, "because": true,
+		"any": true, "these": true, "give": true, "day": true, "most": true,
+		"us": true, "is": true, "are": true, "be": true, "was": true, "were": true,
+		"am": true, "been": true, "being": true, "do": true, "does": true, "did": true,
+		"done": true, "doing": true, "has": true, "had": true, "having": true,
+		"go": true, "goes": true, "went": true, "gone": true, "going": true,
+		"hello": true, "world": true, "main": true, "fmt": true, "println": true,
+		"display": true, "text": true, "message": true, "user": true, "print": true,
+	}
+
+	return !commonWords[strings.ToLower(word)]
+}
+
+// getSuggestions gets spelling suggestions for a misspelled word
+func getSuggestions(word, dictionaryType string) []string {
+	// This is a simplified implementation
+	// In a real implementation, this would use a proper spell checking library
+	// or call an external API
+
+	// For demo purposes, we'll just return some simple suggestions
+	lowerWord := strings.ToLower(word)
+
+	// Check for common misspellings
+	commonMisspellings := map[string][]string{
+		"coment":    []string{"comment"},
+		"speling":   []string{"spelling"},
+		"mesage":    []string{"message"},
+		"acount":    []string{"account"},
+		"messge":    []string{"message"},
+		"mispelled": []string{"misspelled"},
+	}
+
+	if suggestions, ok := commonMisspellings[lowerWord]; ok {
+		return suggestions
+	}
+
+	// Otherwise, generate some simple suggestions
+	var suggestions []string
+
+	// Add 'e' if the word ends with a consonant
+	if len(word) > 2 && !isVowel(rune(word[len(word)-1])) {
+		suggestions = append(suggestions, word+"e")
+	}
+
+	// Double the last letter
+	if len(word) > 2 {
+		suggestions = append(suggestions, word+string(word[len(word)-1]))
+	}
+
+	// Add common suffixes
+	suggestions = append(suggestions, word+"s", word+"ed", word+"ing")
+
+	return suggestions
+}
+
+// isVowel checks if a character is a vowel
+func isVowel(c rune) bool {
+	return strings.ContainsRune("aeiouAEIOU", c)
 }
 
 // RegisterSpellCheck registers the spellcheck tool with the MCP server
