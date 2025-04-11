@@ -117,6 +117,7 @@ Both the server and client support various command-line flags for configuration:
 - **Web Search**: Performs web searches to find information online, allowing AI models to access up-to-date information
 - **RAG (Retrieval Augmented Generation)**: Provides AI-powered code assistance by retrieving relevant code snippets and generating contextual responses
 - **Code Analysis**: Analyzes code to provide insights, metrics, and suggestions for improvement
+- **Patch**: Applies patches to files using the standard unified diff format, supporting various options like strip level and dry run
 
 ### Resources
 
