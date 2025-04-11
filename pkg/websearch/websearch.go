@@ -3,6 +3,7 @@ package websearch
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
@@ -100,4 +101,7 @@ func RegisterWebSearch(mcpServer *server.MCPServer) {
 
 	// Register the tool with the wrapped handler
 	mcpServer.AddTool(webSearchTool, wrappedHandler)
+
+	// Log the registration
+	log.Printf("[WebSearch] Registered websearch tool")
 }
