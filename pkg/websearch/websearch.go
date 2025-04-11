@@ -3,12 +3,9 @@ package websearch
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"strings"
-	"time"
 
+	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -24,7 +21,7 @@ func HandleWebSearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	}
 
 	// Extract number of results
-	numResults := 10 // Default
+	numResults := 10 // Default to 10 results
 	if numResultsFloat, ok := arguments["num_results"].(float64); ok {
 		numResults = int(numResultsFloat)
 	}
@@ -35,30 +32,37 @@ func HandleWebSearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 		engine = "duckduckgo" // Default to DuckDuckGo
 	}
 
-	// Extract safe search
+	// Extract safe search flag
 	safeSearch := true // Default to safe search
 	if safeSearchBool, ok := arguments["safe_search"].(bool); ok {
 		safeSearch = safeSearchBool
 	}
 
 	// Perform the search
-	results, err := performSearch(query, numResults, engine, safeSearch)
+	var results *SearchResults
+	var err error
+
+	switch strings.ToLower(engine) {
+	case "duckduckgo":
+		results, err = searchDuckDuckGo(query, numResults, safeSearch)
+	case "bing":
+		results, err = searchBing(query, numResults, safeSearch)
+	case "google":
+		results, err = searchGoogle(query, numResults, safeSearch)
+	default:
+		return nil, fmt.Errorf("unsupported search engine: %s", engine)
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("error performing web search: %v", err)
+		return nil, fmt.Errorf("error performing search: %v", err)
 	}
 
 	// Format the results
-	resultText := fmt.Sprintf("Web Search Results for: %s\n\n", query)
-	resultText += fmt.Sprintf("Search Engine: %s\n", results.Engine)
-	resultText += fmt.Sprintf("Results: %d\n\n", len(results.Results))
-
+	resultText := fmt.Sprintf("Search Results for '%s' using %s:\n\n", query, results.Engine)
 	for i, result := range results.Results {
 		resultText += fmt.Sprintf("%d. %s\n", i+1, result.Title)
 		resultText += fmt.Sprintf("   URL: %s\n", result.URL)
-		if result.Description != "" {
-			resultText += fmt.Sprintf("   Description: %s\n", result.Description)
-		}
-		resultText += "\n"
+		resultText += fmt.Sprintf("   Snippet: %s\n\n", result.Snippet)
 	}
 
 	return &mcp.CallToolResult{
@@ -71,13 +75,6 @@ func HandleWebSearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	}, nil
 }
 
-// SearchResult represents a single search result
-type SearchResult struct {
-	Title       string
-	URL         string
-	Description string
-}
-
 // SearchResults represents the results of a web search
 type SearchResults struct {
 	Query   string
@@ -85,117 +82,87 @@ type SearchResults struct {
 	Results []SearchResult
 }
 
-// performSearch performs a web search using the specified engine
-func performSearch(query string, numResults int, engine string, safeSearch bool) (*SearchResults, error) {
-	switch strings.ToLower(engine) {
-	case "duckduckgo":
-		return searchDuckDuckGo(query, numResults, safeSearch)
-	case "bing":
-		return searchBing(query, numResults, safeSearch)
-	case "google":
-		return searchGoogle(query, numResults, safeSearch)
-	default:
-		return nil, fmt.Errorf("unsupported search engine: %s", engine)
-	}
+// SearchResult represents a single search result
+type SearchResult struct {
+	Title   string
+	URL     string
+	Snippet string
 }
 
 // searchDuckDuckGo performs a search using DuckDuckGo
 func searchDuckDuckGo(query string, numResults int, safeSearch bool) (*SearchResults, error) {
-	// DuckDuckGo doesn't have an official API, so we'll use their lite version
-	baseURL := "https://lite.duckduckgo.com/lite"
-
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	// Create form data
-	formData := url.Values{}
-	formData.Set("q", query)
-	if !safeSearch {
-		formData.Set("kp", "-2") // Disable safe search
-	}
-
-	// Create request
-	req, err := http.NewRequest("POST", baseURL, strings.NewReader(formData.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-
-	// Send request
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
-	}
-
-	// Parse HTML response (simplified)
-	// In a real implementation, you would use a proper HTML parser
-	results := parseSimplifiedDuckDuckGoResults(string(body), numResults)
-
-	return &SearchResults{
-		Query:   query,
-		Engine:  "DuckDuckGo",
-		Results: results,
-	}, nil
-}
-
-// parseSimplifiedDuckDuckGoResults parses the HTML response from DuckDuckGo
-// This is a simplified implementation and would need a proper HTML parser in production
-func parseSimplifiedDuckDuckGoResults(html string, numResults int) []SearchResult {
-	// This is a simplified implementation
-	// In a real implementation, you would use a proper HTML parser
+	// Note: DuckDuckGo doesn't have an official API, so we'd need to use web scraping
 	// For demonstration purposes, we'll return some mock results
 	mockResults := []SearchResult{
 		{
-			Title:       "Example Search Result 1",
-			URL:         "https://example.com/result1",
-			Description: "This is an example search result description.",
+			Title:   "DuckDuckGo — Privacy, simplified.",
+			URL:     "https://duckduckgo.com/",
+			Snippet: "The Internet privacy company that empowers you to seamlessly take control of your personal information online, without any tradeoffs.",
 		},
 		{
-			Title:       "Example Search Result 2",
-			URL:         "https://example.com/result2",
-			Description: "Another example search result description.",
+			Title:   "DuckDuckGo - Wikipedia",
+			URL:     "https://en.wikipedia.org/wiki/DuckDuckGo",
+			Snippet: "DuckDuckGo is an internet search engine that emphasizes protecting searchers' privacy and avoiding the filter bubble of personalized search results.",
 		},
 		{
-			Title:       "Example Search Result 3",
-			URL:         "https://example.com/result3",
-			Description: "Yet another example search result description.",
+			Title:   "DuckDuckGo (@DuckDuckGo) / X",
+			URL:     "https://twitter.com/duckduckgo",
+			Snippet: "The official Twitter account for DuckDuckGo, the Internet privacy company empowering you to seamlessly take control of your personal information online.",
+		},
+		{
+			Title:   "DuckDuckGo Privacy Browser - Apps on Google Play",
+			URL:     "https://play.google.com/store/apps/details?id=com.duckduckgo.mobile.android",
+			Snippet: "DuckDuckGo Privacy Browser is a privacy browser for Android with built-in tracker blocking, encryption, and private search.",
+		},
+		{
+			Title:   "DuckDuckGo Privacy Browser on the App Store",
+			URL:     "https://apps.apple.com/us/app/duckduckgo-privacy-browser/id663592361",
+			Snippet: "DuckDuckGo Privacy Browser is a privacy browser for iOS with built-in tracker blocking, encryption, and private search.",
 		},
 	}
 
 	// Limit the number of results
 	if numResults < len(mockResults) {
-		return mockResults[:numResults]
+		mockResults = mockResults[:numResults]
 	}
-	return mockResults
+
+	return &SearchResults{
+		Query:   query,
+		Engine:  "DuckDuckGo",
+		Results: mockResults,
+	}, nil
 }
 
 // searchBing performs a search using Bing
 func searchBing(query string, numResults int, safeSearch bool) (*SearchResults, error) {
 	// Note: In a real implementation, you would use the Bing Search API
-	// which requires an API key from Microsoft Azure
+	// which requires an API key
 	// For demonstration purposes, we'll return some mock results
 	mockResults := []SearchResult{
 		{
-			Title:       "Bing Search Result 1",
-			URL:         "https://example.com/bing1",
-			Description: "This is a Bing search result description.",
+			Title:   "Bing",
+			URL:     "https://www.bing.com/",
+			Snippet: "Bing helps you turn information into action, making it faster and easier to go from searching to doing.",
 		},
 		{
-			Title:       "Bing Search Result 2",
-			URL:         "https://example.com/bing2",
-			Description: "Another Bing search result description.",
+			Title:   "Bing - Wikipedia",
+			URL:     "https://en.wikipedia.org/wiki/Bing",
+			Snippet: "Bing is a web search engine owned and operated by Microsoft. The service has its origins in Microsoft's previous search engines: MSN Search, Windows Live Search and later Live Search.",
+		},
+		{
+			Title:   "Microsoft Bing Search API | Microsoft Azure",
+			URL:     "https://azure.microsoft.com/en-us/services/cognitive-services/bing-web-search-api/",
+			Snippet: "The Bing Search APIs let you build web-connected apps and services that find webpages, images, news, locations, and more without advertisements.",
+		},
+		{
+			Title:   "Bing Maps - Directions, trip planning, traffic cameras & more",
+			URL:     "https://www.bing.com/maps",
+			Snippet: "Map multiple locations, get transit/walking/driving directions, view live traffic conditions, plan trips, view satellite, aerial and street side imagery.",
+		},
+		{
+			Title:   "Bing Ads - Microsoft Advertising",
+			URL:     "https://ads.microsoft.com/",
+			Snippet: "Microsoft Advertising (formerly Bing Ads) is a service that provides pay per click advertising on the Bing and Yahoo! search engines.",
 		},
 	}
 
@@ -218,19 +185,29 @@ func searchGoogle(query string, numResults int, safeSearch bool) (*SearchResults
 	// For demonstration purposes, we'll return some mock results
 	mockResults := []SearchResult{
 		{
-			Title:       "Google Search Result 1",
-			URL:         "https://example.com/google1",
-			Description: "This is a Google search result description.",
+			Title:   "Google",
+			URL:     "https://www.google.com/",
+			Snippet: "Search the world's information, including webpages, images, videos and more. Google has many special features to help you find exactly what you're looking for.",
 		},
 		{
-			Title:       "Google Search Result 2",
-			URL:         "https://example.com/google2",
-			Description: "Another Google search result description.",
+			Title:   "Google - Wikipedia",
+			URL:     "https://en.wikipedia.org/wiki/Google",
+			Snippet: "Google LLC is an American multinational technology company that specializes in Internet-related services and products, which include online advertising technologies, a search engine, cloud computing, software, and hardware.",
 		},
 		{
-			Title:       "Google Search Result 3",
-			URL:         "https://example.com/google3",
-			Description: "Yet another Google search result description.",
+			Title:   "Google Search - Wikipedia",
+			URL:     "https://en.wikipedia.org/wiki/Google_Search",
+			Snippet: "Google Search, or simply Google, is a web search engine developed by Google LLC. It is the most used search engine on the World Wide Web across all platforms.",
+		},
+		{
+			Title:   "Google Maps",
+			URL:     "https://www.google.com/maps",
+			Snippet: "Find local businesses, view maps and get driving directions in Google Maps.",
+		},
+		{
+			Title:   "Gmail - Email from Google",
+			URL:     "https://www.gmail.com/",
+			Snippet: "Gmail is email that's intuitive, efficient, and useful. 15 GB of storage, less spam, and mobile access.",
 		},
 	}
 
@@ -248,7 +225,8 @@ func searchGoogle(query string, numResults int, safeSearch bool) (*SearchResults
 
 // RegisterWebSearch registers the web search tool with the MCP server
 func RegisterWebSearch(mcpServer *server.MCPServer) {
-	mcpServer.AddTool(mcp.NewTool("websearch",
+	// Create the tool definition
+	webSearchTool := mcp.NewTool("websearch",
 		mcp.WithDescription("Performs web searches to find information online, allowing AI models to access up-to-date information"),
 		mcp.WithString("query",
 			mcp.Description("The search query"),
@@ -263,5 +241,11 @@ func RegisterWebSearch(mcpServer *server.MCPServer) {
 		mcp.WithBoolean("safe_search",
 			mcp.Description("Whether to enable safe search (default: true)"),
 		),
-	), HandleWebSearch)
+	)
+
+	// Wrap the handler with stats tracking
+	wrappedHandler := stats.WrapHandler("websearch", HandleWebSearch)
+
+	// Register the tool with the wrapped handler
+	mcpServer.AddTool(webSearchTool, wrappedHandler)
 }

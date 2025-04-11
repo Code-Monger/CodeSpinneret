@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -176,15 +177,14 @@ func applyPatch(patchContent, targetDir string, stripLevel int, dryRun bool) (*P
 func parsePatch(patchContent string) ([]FilePatch, error) {
 	var patches []FilePatch
 	var currentPatch *FilePatch
-	var currentHunk *Hunk
+
+	// Split the patch content into lines
+	lines := strings.Split(patchContent, "\n")
 
 	// Regular expressions for parsing patch headers
 	fileHeaderRegex := regexp.MustCompile(`^--- ([^\t\n]+)[\t]*.*$`)
 	fileTargetRegex := regexp.MustCompile(`^\+\+\+ ([^\t\n]+)[\t]*.*$`)
 	hunkHeaderRegex := regexp.MustCompile(`^@@ -(\d+),(\d+) \+(\d+),(\d+) @@.*$`)
-
-	// Split the patch content into lines
-	lines := strings.Split(patchContent, "\n")
 
 	// Process each line
 	for i := 0; i < len(lines); i++ {
@@ -223,7 +223,7 @@ func parsePatch(patchContent string) ([]FilePatch, error) {
 				targetLines, _ := strconv.Atoi(matches[4])
 
 				// Start a new hunk
-				currentHunk = &Hunk{
+				hunk := Hunk{
 					SourceStart: sourceStart,
 					SourceLines: sourceLines,
 					TargetStart: targetStart,
@@ -248,13 +248,13 @@ func parsePatch(patchContent string) ([]FilePatch, error) {
 					// Process the line based on its prefix
 					if strings.HasPrefix(contentLine, "+") {
 						// Added line
-						currentHunk.Added = append(currentHunk.Added, contentLine[1:])
+						hunk.Added = append(hunk.Added, contentLine[1:])
 					} else if strings.HasPrefix(contentLine, "-") {
 						// Removed line
-						currentHunk.Removed = append(currentHunk.Removed, contentLine[1:])
+						hunk.Removed = append(hunk.Removed, contentLine[1:])
 					} else if strings.HasPrefix(contentLine, " ") {
 						// Context line
-						currentHunk.Context = append(currentHunk.Context, contentLine[1:])
+						hunk.Context = append(hunk.Context, contentLine[1:])
 					}
 
 					j++
@@ -264,7 +264,7 @@ func parsePatch(patchContent string) ([]FilePatch, error) {
 				i = j - 1
 
 				// Add the hunk to the current patch
-				currentPatch.Hunks = append(currentPatch.Hunks, *currentHunk)
+				currentPatch.Hunks = append(currentPatch.Hunks, hunk)
 				continue
 			}
 		}
@@ -365,7 +365,8 @@ func applyHunk(lines []string, hunk Hunk, location int) []string {
 
 // RegisterPatch registers the patch tool with the MCP server
 func RegisterPatch(mcpServer *server.MCPServer) {
-	mcpServer.AddTool(mcp.NewTool("patch",
+	// Create the tool definition
+	patchTool := mcp.NewTool("patch",
 		mcp.WithDescription("Applies patches to files using the standard unified diff format"),
 		mcp.WithString("patch_content",
 			mcp.Description("The content of the patch file in unified diff format"),
@@ -380,5 +381,11 @@ func RegisterPatch(mcpServer *server.MCPServer) {
 		mcp.WithBoolean("dry_run",
 			mcp.Description("If true, show what would be done but don't actually modify any files (default: false)"),
 		),
-	), HandlePatch)
+	)
+
+	// Wrap the handler with stats tracking
+	wrappedHandler := stats.WrapHandler("patch", HandlePatch)
+
+	// Register the tool with the wrapped handler
+	mcpServer.AddTool(patchTool, wrappedHandler)
 }

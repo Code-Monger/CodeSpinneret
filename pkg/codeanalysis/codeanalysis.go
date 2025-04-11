@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -291,7 +292,8 @@ func handleSuggestImprovements(arguments map[string]interface{}) (*mcp.CallToolR
 
 // RegisterCodeAnalysis registers the code analysis tool with the MCP server
 func RegisterCodeAnalysis(mcpServer *server.MCPServer) {
-	mcpServer.AddTool(mcp.NewTool("codeanalysis",
+	// Create the tool definition
+	codeAnalysisTool := mcp.NewTool("codeanalysis",
 		mcp.WithDescription("Analyzes code to provide insights, metrics, and suggestions for improvement"),
 		mcp.WithString("operation",
 			mcp.Description("Operation to perform: 'analyze_file', 'analyze_directory', 'find_issues', or 'suggest_improvements'"),
@@ -321,5 +323,11 @@ func RegisterCodeAnalysis(mcpServer *server.MCPServer) {
 		mcp.WithArray("improvement_types",
 			mcp.Description("Types of improvements to suggest (e.g., ['refactoring', 'performance', 'readability'])"),
 		),
-	), HandleCodeAnalysis)
+	)
+
+	// Wrap the handler with stats tracking
+	wrappedHandler := stats.WrapHandler("codeanalysis", HandleCodeAnalysis)
+
+	// Register the tool with the wrapped handler
+	mcpServer.AddTool(codeAnalysisTool, wrappedHandler)
 }

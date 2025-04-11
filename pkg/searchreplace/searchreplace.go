@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -35,48 +36,68 @@ func HandleSearchReplace(ctx context.Context, request mcp.CallToolRequest) (*mcp
 		return nil, fmt.Errorf("search_pattern must be a string")
 	}
 
-	// Extract replacement text
+	// Extract replacement
 	replacement, ok := arguments["replacement"].(string)
 	if !ok {
 		return nil, fmt.Errorf("replacement must be a string")
 	}
 
-	// Extract regex flag
-	useRegex, _ := arguments["use_regex"].(bool)
+	// Extract use_regex flag
+	useRegex := false
+	if useRegexBool, ok := arguments["use_regex"].(bool); ok {
+		useRegex = useRegexBool
+	}
 
 	// Extract recursive flag
-	recursive, _ := arguments["recursive"].(bool)
+	recursive := false
+	if recursiveBool, ok := arguments["recursive"].(bool); ok {
+		recursive = recursiveBool
+	}
 
 	// Extract preview flag
-	preview, _ := arguments["preview"].(bool)
+	preview := false
+	if previewBool, ok := arguments["preview"].(bool); ok {
+		preview = previewBool
+	}
 
-	// Extract case sensitive flag
-	caseSensitive, _ := arguments["case_sensitive"].(bool)
+	// Extract case_sensitive flag
+	caseSensitive := true
+	if caseSensitiveBool, ok := arguments["case_sensitive"].(bool); ok {
+		caseSensitive = caseSensitiveBool
+	}
 
-	// Perform search and replace
-	results, err := searchAndReplace(directory, filePattern, searchPattern, replacement, useRegex, recursive, preview, caseSensitive)
+	// Perform the search and replace
+	result, err := searchAndReplace(directory, filePattern, searchPattern, replacement, useRegex, recursive, preview, caseSensitive)
 	if err != nil {
 		return nil, fmt.Errorf("error performing search and replace: %v", err)
 	}
 
-	// Format results
+	// Format the result
 	resultText := fmt.Sprintf("Search and Replace Results:\n\n")
-	if preview {
-		resultText += "Preview mode: No files were modified\n\n"
-	}
+	resultText += fmt.Sprintf("Directory: %s\n", directory)
+	resultText += fmt.Sprintf("File Pattern: %s\n", filePattern)
+	resultText += fmt.Sprintf("Search Pattern: %s\n", searchPattern)
+	resultText += fmt.Sprintf("Replacement: %s\n", replacement)
+	resultText += fmt.Sprintf("Use Regex: %t\n", useRegex)
+	resultText += fmt.Sprintf("Recursive: %t\n", recursive)
+	resultText += fmt.Sprintf("Preview: %t\n", preview)
+	resultText += fmt.Sprintf("Case Sensitive: %t\n\n", caseSensitive)
 
-	resultText += fmt.Sprintf("Files processed: %d\n", results.FilesProcessed)
-	resultText += fmt.Sprintf("Files modified: %d\n", results.FilesModified)
-	resultText += fmt.Sprintf("Total replacements: %d\n\n", results.TotalReplacements)
+	resultText += fmt.Sprintf("Files Processed: %d\n", result.FilesProcessed)
+	resultText += fmt.Sprintf("Files Modified: %d\n", result.FilesModified)
+	resultText += fmt.Sprintf("Total Replacements: %d\n\n", result.TotalReplacements)
 
-	if len(results.Details) > 0 {
-		resultText += "Details:\n"
-		for _, detail := range results.Details {
-			resultText += fmt.Sprintf("- %s: %d replacements\n", detail.FilePath, detail.Replacements)
+	if len(result.FileDetails) > 0 {
+		resultText += "File Details:\n"
+		for _, fileDetail := range result.FileDetails {
+			resultText += fmt.Sprintf("\nFile: %s\n", fileDetail.FilePath)
+			resultText += fmt.Sprintf("Replacements: %d\n", fileDetail.Replacements)
 
-			// Add sample of changes if available
-			if detail.Sample != "" {
-				resultText += fmt.Sprintf("  Sample: %s\n", detail.Sample)
+			if len(fileDetail.Matches) > 0 {
+				resultText += "Matches:\n"
+				for _, match := range fileDetail.Matches {
+					resultText += fmt.Sprintf("- Line %d: %s\n", match.LineNumber, match.LineContent)
+				}
 			}
 		}
 	}
@@ -91,44 +112,36 @@ func HandleSearchReplace(ctx context.Context, request mcp.CallToolRequest) (*mcp
 	}, nil
 }
 
-// SearchReplaceResults represents the results of a search and replace operation
-type SearchReplaceResults struct {
+// SearchReplaceResult represents the result of a search and replace operation
+type SearchReplaceResult struct {
 	FilesProcessed    int
 	FilesModified     int
 	TotalReplacements int
-	Details           []FileDetail
+	FileDetails       []FileDetail
 }
 
-// FileDetail represents details about replacements in a specific file
+// FileDetail represents details about a file that was processed
 type FileDetail struct {
 	FilePath     string
 	Replacements int
-	Sample       string
+	Matches      []Match
 }
 
-// searchAndReplace performs search and replace operations on files
-func searchAndReplace(directory, filePattern, searchPattern, replacement string, useRegex, recursive, preview, caseSensitive bool) (*SearchReplaceResults, error) {
-	results := &SearchReplaceResults{
-		Details: []FileDetail{},
+// Match represents a match in a file
+type Match struct {
+	LineNumber  int
+	LineContent string
+}
+
+// searchAndReplace performs a search and replace operation on files
+func searchAndReplace(directory, filePattern, searchPattern, replacement string, useRegex, recursive, preview, caseSensitive bool) (*SearchReplaceResult, error) {
+	result := &SearchReplaceResult{
+		FileDetails: []FileDetail{},
 	}
 
-	// Validate directory
-	dirInfo, err := os.Stat(directory)
-	if err != nil {
-		return nil, fmt.Errorf("directory error: %v", err)
-	}
-	if !dirInfo.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory", directory)
-	}
-
-	// Check if file pattern is valid
-	_, err = filepath.Match(filePattern, "")
-	if err != nil {
-		return nil, fmt.Errorf("invalid file pattern: %v", err)
-	}
-
-	// Prepare search pattern
+	// Compile the search pattern if using regex
 	var searchRegex *regexp.Regexp
+	var err error
 	if useRegex {
 		if caseSensitive {
 			searchRegex, err = regexp.Compile(searchPattern)
@@ -138,26 +151,23 @@ func searchAndReplace(directory, filePattern, searchPattern, replacement string,
 		if err != nil {
 			return nil, fmt.Errorf("invalid search pattern regex: %v", err)
 		}
-	} else if !caseSensitive {
-		searchPattern = strings.ToLower(searchPattern)
 	}
 
-	// Walk through the directory
-	err = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
+	// Walk the directory tree
+	walkFn := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// Skip directories
+		// Skip directories unless we're at the root
 		if info.IsDir() {
-			// If not recursive, skip subdirectories
-			if !recursive && path != directory {
+			if path != directory && !recursive {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		// Check if file matches the pattern
+		// Check if the file matches the pattern
 		matched, err := filepath.Match(filePattern, filepath.Base(path))
 		if err != nil {
 			return err
@@ -167,136 +177,103 @@ func searchAndReplace(directory, filePattern, searchPattern, replacement string,
 		}
 
 		// Process the file
-		fileDetail, err := processFile(path, searchPattern, replacement, searchRegex, preview, caseSensitive)
+		fileDetail, err := processFile(path, searchPattern, replacement, useRegex, preview, caseSensitive, searchRegex)
 		if err != nil {
 			return err
 		}
 
-		// Update results
-		results.FilesProcessed++
+		// Update the result
+		result.FilesProcessed++
 		if fileDetail.Replacements > 0 {
-			results.FilesModified++
-			results.TotalReplacements += fileDetail.Replacements
-			results.Details = append(results.Details, *fileDetail)
+			result.FilesModified++
+			result.TotalReplacements += fileDetail.Replacements
+			result.FileDetails = append(result.FileDetails, *fileDetail)
 		}
 
 		return nil
-	})
+	}
 
+	err = filepath.Walk(directory, walkFn)
 	if err != nil {
 		return nil, err
 	}
 
-	return results, nil
+	return result, nil
 }
 
-// processFile performs search and replace on a single file
-func processFile(filePath, searchPattern, replacement string, searchRegex *regexp.Regexp, preview, caseSensitive bool) (*FileDetail, error) {
-	// Read file content
+// processFile processes a single file for search and replace
+func processFile(filePath, searchPattern, replacement string, useRegex, preview, caseSensitive bool, searchRegex *regexp.Regexp) (*FileDetail, error) {
+	fileDetail := &FileDetail{
+		FilePath: filePath,
+		Matches:  []Match{},
+	}
+
+	// Read the file
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error accessing file %s: %v", filePath, err)
+	}
+
 	content, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading file %s: %v", filePath, err)
 	}
 
-	fileDetail := &FileDetail{
-		FilePath: filePath,
-	}
-
-	// Convert content to string
-	contentStr := string(content)
-	originalContent := contentStr
-
-	// Perform replacement
+	// Process the content
 	var newContent string
-	if searchRegex != nil {
-		// Use regex replacement
-		newContent = searchRegex.ReplaceAllString(contentStr, replacement)
-		fileDetail.Replacements = len(searchRegex.FindAllString(contentStr, -1))
+	if useRegex {
+		// Use regex for search and replace
+		newContent = searchRegex.ReplaceAllString(string(content), replacement)
+		fileDetail.Replacements = len(searchRegex.FindAllString(string(content), -1))
 	} else {
-		// Use simple string replacement
+		// Use simple string search and replace
 		if caseSensitive {
-			newContent = strings.ReplaceAll(contentStr, searchPattern, replacement)
-			fileDetail.Replacements = strings.Count(contentStr, searchPattern)
+			fileDetail.Replacements = strings.Count(string(content), searchPattern)
+			newContent = strings.ReplaceAll(string(content), searchPattern, replacement)
 		} else {
-			// Case insensitive replacement without regex
-			lowerContent := strings.ToLower(contentStr)
-			lastIndex := 0
-			count := 0
-			newContent = contentStr
+			// Case-insensitive search and replace
+			lowerContent := strings.ToLower(string(content))
+			lowerPattern := strings.ToLower(searchPattern)
+			fileDetail.Replacements = strings.Count(lowerContent, lowerPattern)
 
+			// Perform the replacement
+			newContent = string(content)
+			lastIndex := 0
 			for {
-				index := strings.Index(lowerContent[lastIndex:], searchPattern)
+				index := strings.Index(strings.ToLower(newContent[lastIndex:]), lowerPattern)
 				if index == -1 {
 					break
 				}
-
-				// Adjust index to account for the slice
 				index += lastIndex
-
-				// Replace in the original case
 				newContent = newContent[:index] + replacement + newContent[index+len(searchPattern):]
-
-				// Update the lowercase content to match
-				lowerContent = strings.ToLower(newContent)
-
-				// Move past this replacement
 				lastIndex = index + len(replacement)
-				count++
 			}
-
-			fileDetail.Replacements = count
 		}
 	}
 
-	// If there were replacements, add a sample
-	if fileDetail.Replacements > 0 {
-		// Find a context for the first replacement
-		var beforeContext, afterContext string
-		var replacementIndex int
-
-		if searchRegex != nil {
-			loc := searchRegex.FindStringIndex(originalContent)
-			if loc != nil {
-				replacementIndex = loc[0]
-			}
+	// Find matches for reporting
+	lines := strings.Split(string(content), "\n")
+	for i, line := range lines {
+		var matches bool
+		if useRegex {
+			matches = searchRegex.MatchString(line)
 		} else if caseSensitive {
-			replacementIndex = strings.Index(originalContent, searchPattern)
+			matches = strings.Contains(line, searchPattern)
 		} else {
-			lowerContent := strings.ToLower(originalContent)
-			replacementIndex = strings.Index(lowerContent, searchPattern)
+			matches = strings.Contains(strings.ToLower(line), strings.ToLower(searchPattern))
 		}
 
-		if replacementIndex >= 0 {
-			// Get context before replacement
-			startContext := replacementIndex - 20
-			if startContext < 0 {
-				startContext = 0
-			}
-			beforeContext = originalContent[startContext:replacementIndex]
-
-			// Get context after replacement
-			endContext := replacementIndex + len(searchPattern) + 20
-			if endContext > len(originalContent) {
-				endContext = len(originalContent)
-			}
-			afterContext = originalContent[replacementIndex+len(searchPattern) : endContext]
-
-			// Create sample
-			fileDetail.Sample = fmt.Sprintf("...%s[%s -> %s]%s...",
-				beforeContext,
-				originalContent[replacementIndex:replacementIndex+len(searchPattern)],
-				replacement,
-				afterContext)
+		if matches {
+			fileDetail.Matches = append(fileDetail.Matches, Match{
+				LineNumber:  i + 1,
+				LineContent: line,
+			})
 		}
+	}
 
-		// Write the changes to the file if not in preview mode
-		if !preview {
-			// Get file info to preserve file mode
-			fileInfo, err := os.Stat(filePath)
-			if err != nil {
-				return nil, fmt.Errorf("error getting file info for %s: %v", filePath, err)
-			}
-
+	// Write the changes to the file if not in preview mode
+	if !preview && fileDetail.Replacements > 0 {
+		if string(content) != newContent {
 			// Write the changes to the file
 			err = ioutil.WriteFile(filePath, []byte(newContent), fileInfo.Mode())
 			if err != nil {
@@ -310,7 +287,8 @@ func processFile(filePath, searchPattern, replacement string, searchRegex *regex
 
 // RegisterSearchReplace registers the search replace tool with the MCP server
 func RegisterSearchReplace(mcpServer *server.MCPServer) {
-	mcpServer.AddTool(mcp.NewTool("searchreplace",
+	// Create the tool definition
+	searchReplaceTool := mcp.NewTool("searchreplace",
 		mcp.WithDescription("Find and replace text in files, with support for regular expressions and batch operations"),
 		mcp.WithString("directory",
 			mcp.Description("Directory to search in"),
@@ -340,5 +318,11 @@ func RegisterSearchReplace(mcpServer *server.MCPServer) {
 		mcp.WithBoolean("case_sensitive",
 			mcp.Description("Whether the search should be case sensitive"),
 		),
-	), HandleSearchReplace)
+	)
+
+	// Wrap the handler with stats tracking
+	wrappedHandler := stats.WrapHandler("searchreplace", HandleSearchReplace)
+
+	// Register the tool with the wrapped handler
+	mcpServer.AddTool(searchReplaceTool, wrappedHandler)
 }

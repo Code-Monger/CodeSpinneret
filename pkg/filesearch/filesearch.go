@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -23,36 +24,31 @@ func HandleFileSearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 		return nil, fmt.Errorf("directory must be a string")
 	}
 
-	// Extract pattern
+	// Extract file name pattern
 	pattern, _ := arguments["pattern"].(string)
-	// If pattern is not provided, match all files
-	if pattern == "" {
-		pattern = "*"
-	}
 
 	// Extract content pattern
-	contentPattern, hasContentPattern := arguments["content_pattern"].(string)
+	contentPattern, _ := arguments["content_pattern"].(string)
 
 	// Extract recursive flag
-	recursive, _ := arguments["recursive"].(bool)
+	recursive := false
+	if recursiveBool, ok := arguments["recursive"].(bool); ok {
+		recursive = recursiveBool
+	}
 
-	// Extract modified after
-	modifiedAfterStr, hasModifiedAfter := arguments["modified_after"].(string)
+	// Extract modified after date
 	var modifiedAfter time.Time
-	if hasModifiedAfter {
+	if modifiedAfterStr, ok := arguments["modified_after"].(string); ok && modifiedAfterStr != "" {
 		var err error
 		modifiedAfter, err = time.Parse(time.RFC3339, modifiedAfterStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid modified_after date format, use RFC3339 (e.g., 2006-01-02T15:04:05Z07:00): %v", err)
+			return nil, fmt.Errorf("invalid modified_after date format: %v", err)
 		}
 	}
 
-	// Extract size constraints
-	minSizeStr, hasMinSize := arguments["min_size"].(string)
-	maxSizeStr, hasMaxSize := arguments["max_size"].(string)
-
-	var minSize, maxSize int64
-	if hasMinSize {
+	// Extract min size
+	var minSize int64
+	if minSizeStr, ok := arguments["min_size"].(string); ok && minSizeStr != "" {
 		var err error
 		minSize, err = parseSize(minSizeStr)
 		if err != nil {
@@ -60,7 +56,9 @@ func HandleFileSearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 		}
 	}
 
-	if hasMaxSize {
+	// Extract max size
+	var maxSize int64
+	if maxSizeStr, ok := arguments["max_size"].(string); ok && maxSizeStr != "" {
 		var err error
 		maxSize, err = parseSize(maxSizeStr)
 		if err != nil {
@@ -68,13 +66,13 @@ func HandleFileSearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 		}
 	}
 
-	// Compile content regex if provided
+	// Compile content pattern regex if provided
 	var contentRegex *regexp.Regexp
-	if hasContentPattern {
+	if contentPattern != "" {
 		var err error
 		contentRegex, err = regexp.Compile(contentPattern)
 		if err != nil {
-			return nil, fmt.Errorf("invalid content_pattern regex: %v", err)
+			return nil, fmt.Errorf("invalid content pattern regex: %v", err)
 		}
 	}
 
@@ -84,14 +82,14 @@ func HandleFileSearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 		return nil, fmt.Errorf("error searching files: %v", err)
 	}
 
-	// Format results
-	resultText := fmt.Sprintf("Found %d files matching criteria:\n\n", len(results))
-	for _, file := range results {
-		resultText += fmt.Sprintf("- %s\n", file.Path)
-		resultText += fmt.Sprintf("  Size: %s\n", formatSize(file.Size))
-		resultText += fmt.Sprintf("  Modified: %s\n", file.ModTime.Format(time.RFC3339))
-		if file.ContentMatch != "" {
-			resultText += fmt.Sprintf("  Content match: %s\n", file.ContentMatch)
+	// Format the results
+	resultText := fmt.Sprintf("Found %d files matching the criteria:\n\n", len(results))
+	for _, result := range results {
+		resultText += fmt.Sprintf("Path: %s\n", result.Path)
+		resultText += fmt.Sprintf("Size: %s\n", formatSize(result.Size))
+		resultText += fmt.Sprintf("Modified: %s\n", result.ModTime.Format(time.RFC3339))
+		if result.ContentMatch != "" {
+			resultText += fmt.Sprintf("Content match: %s\n", result.ContentMatch)
 		}
 		resultText += "\n"
 	}
@@ -118,37 +116,38 @@ type FileResult struct {
 func searchFiles(directory, pattern string, contentRegex *regexp.Regexp, recursive bool, modifiedAfter time.Time, minSize, maxSize int64) ([]FileResult, error) {
 	var results []FileResult
 
-	// Validate directory
-	dirInfo, err := os.Stat(directory)
+	// Ensure the directory exists
+	info, err := os.Stat(directory)
 	if err != nil {
-		return nil, fmt.Errorf("directory error: %v", err)
+		return nil, fmt.Errorf("error accessing directory: %v", err)
 	}
-	if !dirInfo.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory", directory)
+	if !info.IsDir() {
+		return nil, fmt.Errorf("path is not a directory: %s", directory)
 	}
 
-	// Define the walk function
+	// Walk the directory tree
 	walkFn := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// Skip directories if we're only interested in files
+		// Skip directories unless we're at the root
 		if info.IsDir() {
-			// If not recursive, skip subdirectories
-			if !recursive && path != directory {
+			if path != directory && !recursive {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		// Check if the file matches the pattern
-		matched, err := filepath.Match(pattern, filepath.Base(path))
-		if err != nil {
-			return err
-		}
-		if !matched {
-			return nil
+		// Check file name pattern
+		if pattern != "" {
+			matched, err := filepath.Match(pattern, info.Name())
+			if err != nil {
+				return err
+			}
+			if !matched {
+				return nil
+			}
 		}
 
 		// Check modified time
@@ -156,7 +155,7 @@ func searchFiles(directory, pattern string, contentRegex *regexp.Regexp, recursi
 			return nil
 		}
 
-		// Check size constraints
+		// Check file size
 		if minSize > 0 && info.Size() < minSize {
 			return nil
 		}
@@ -164,51 +163,22 @@ func searchFiles(directory, pattern string, contentRegex *regexp.Regexp, recursi
 			return nil
 		}
 
-		// Check content if regex is provided
+		// Check file content if needed
 		var contentMatch string
 		if contentRegex != nil {
 			content, err := os.ReadFile(path)
 			if err != nil {
-				// Skip files that can't be read
 				return nil
 			}
 
-			if contentRegex.Match(content) {
-				// Find the first match for display
-				loc := contentRegex.FindIndex(content)
-				if loc != nil {
-					// Get some context around the match
-					start := loc[0]
-					end := loc[1]
-
-					// Get up to 50 chars before and after the match
-					contextStart := start - 50
-					if contextStart < 0 {
-						contextStart = 0
-					}
-					contextEnd := end + 50
-					if contextEnd > len(content) {
-						contextEnd = len(content)
-					}
-
-					// Extract the context
-					context := content[contextStart:contextEnd]
-					// Convert to string and clean up for display
-					contextStr := string(context)
-					// Replace newlines with spaces for display
-					contextStr = strings.ReplaceAll(contextStr, "\n", " ")
-					// Truncate if too long
-					if len(contextStr) > 100 {
-						contextStr = contextStr[:97] + "..."
-					}
-					contentMatch = contextStr
-				}
+			if matches := contentRegex.FindSubmatch(content); len(matches) > 0 {
+				contentMatch = string(matches[0])
 			} else {
-				return nil // Skip files that don't match content
+				return nil
 			}
 		}
 
-		// Add to results
+		// Add the file to the results
 		results = append(results, FileResult{
 			Path:         path,
 			Size:         info.Size(),
@@ -219,7 +189,6 @@ func searchFiles(directory, pattern string, contentRegex *regexp.Regexp, recursi
 		return nil
 	}
 
-	// Walk the directory
 	err = filepath.Walk(directory, walkFn)
 	if err != nil {
 		return nil, err
@@ -228,25 +197,38 @@ func searchFiles(directory, pattern string, contentRegex *regexp.Regexp, recursi
 	return results, nil
 }
 
-// parseSize parses a size string (e.g., "10MB") into bytes
+// parseSize parses a human-readable size string (e.g., "10KB", "5MB") to bytes
 func parseSize(sizeStr string) (int64, error) {
 	sizeStr = strings.TrimSpace(sizeStr)
 	if sizeStr == "" {
 		return 0, nil
 	}
 
-	// Check for unit suffix
-	var multiplier int64 = 1
-	var numStr string
+	// Define size multipliers
+	multipliers := map[string]int64{
+		"B":  1,
+		"KB": 1024,
+		"MB": 1024 * 1024,
+		"GB": 1024 * 1024 * 1024,
+		"TB": 1024 * 1024 * 1024 * 1024,
+	}
 
+	// Default multiplier is bytes
+	multiplier := int64(1)
+	numStr := sizeStr
+
+	// Check for unit suffix
 	if strings.HasSuffix(sizeStr, "KB") {
-		multiplier = 1024
+		multiplier = multipliers["KB"]
 		numStr = sizeStr[:len(sizeStr)-2]
 	} else if strings.HasSuffix(sizeStr, "MB") {
-		multiplier = 1024 * 1024
+		multiplier = multipliers["MB"]
 		numStr = sizeStr[:len(sizeStr)-2]
 	} else if strings.HasSuffix(sizeStr, "GB") {
-		multiplier = 1024 * 1024 * 1024
+		multiplier = multipliers["GB"]
+		numStr = sizeStr[:len(sizeStr)-2]
+	} else if strings.HasSuffix(sizeStr, "TB") {
+		multiplier = multipliers["TB"]
 		numStr = sizeStr[:len(sizeStr)-2]
 	} else if strings.HasSuffix(sizeStr, "B") {
 		numStr = sizeStr[:len(sizeStr)-1]
@@ -281,7 +263,8 @@ func formatSize(size int64) string {
 
 // RegisterFileSearch registers the file search tool with the MCP server
 func RegisterFileSearch(mcpServer *server.MCPServer) {
-	mcpServer.AddTool(mcp.NewTool("filesearch",
+	// Create the tool definition
+	fileSearchTool := mcp.NewTool("filesearch",
 		mcp.WithDescription("Search for files based on various criteria like name patterns, content, size, and modification time"),
 		mcp.WithString("directory",
 			mcp.Description("Directory to search in"),
@@ -305,5 +288,11 @@ func RegisterFileSearch(mcpServer *server.MCPServer) {
 		mcp.WithString("max_size",
 			mcp.Description("Maximum file size (e.g., '10KB', '5MB')"),
 		),
-	), HandleFileSearch)
+	)
+
+	// Wrap the handler with stats tracking
+	wrappedHandler := stats.WrapHandler("filesearch", HandleFileSearch)
+
+	// Register the tool with the wrapped handler
+	mcpServer.AddTool(fileSearchTool, wrappedHandler)
 }

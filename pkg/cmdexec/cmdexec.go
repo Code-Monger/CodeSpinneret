@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -103,7 +104,8 @@ func HandleCommandExecution(ctx context.Context, request mcp.CallToolRequest) (*
 
 // RegisterCommandExecution registers the command execution tool with the MCP server
 func RegisterCommandExecution(mcpServer *server.MCPServer) {
-	mcpServer.AddTool(mcp.NewTool("cmdexec",
+	// Create the tool definition
+	cmdexecTool := mcp.NewTool("cmdexec",
 		mcp.WithDescription("Execute commands on the system, such as running scripts, compiling code, or starting applications"),
 		mcp.WithString("command",
 			mcp.Description("The command to execute"),
@@ -115,5 +117,11 @@ func RegisterCommandExecution(mcpServer *server.MCPServer) {
 		mcp.WithNumber("timeout",
 			mcp.Description("Timeout in seconds (default: 30)"),
 		),
-	), HandleCommandExecution)
+	)
+
+	// Wrap the handler with stats tracking
+	wrappedHandler := stats.WrapHandler("cmdexec", HandleCommandExecution)
+
+	// Register the tool with the wrapped handler
+	mcpServer.AddTool(cmdexecTool, wrappedHandler)
 }

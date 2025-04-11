@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -661,7 +662,8 @@ func min(a, b int) int {
 
 // RegisterRAG registers the RAG tool with the MCP server
 func RegisterRAG(mcpServer *server.MCPServer) {
-	mcpServer.AddTool(mcp.NewTool("rag",
+	// Create the tool definition
+	ragTool := mcp.NewTool("rag",
 		mcp.WithDescription("Provides AI-powered code assistance using Retrieval Augmented Generation (RAG), which combines information retrieval with generative AI"),
 		mcp.WithString("operation",
 			mcp.Description("Operation to perform: 'index' to index a repository, 'query' to query the repository"),
@@ -680,5 +682,11 @@ func RegisterRAG(mcpServer *server.MCPServer) {
 		mcp.WithNumber("num_results",
 			mcp.Description("Number of results to return (for 'query' operation)"),
 		),
-	), HandleRAG)
+	)
+
+	// Wrap the handler with stats tracking
+	wrappedHandler := stats.WrapHandler("rag", HandleRAG)
+
+	// Register the tool with the wrapped handler
+	mcpServer.AddTool(ragTool, wrappedHandler)
 }

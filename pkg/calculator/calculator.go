@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -13,9 +12,6 @@ import (
 
 // HandleCalculator is the handler function for the calculator tool
 func HandleCalculator(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Record the start time for stats
-	startTime := time.Now()
-
 	arguments := request.Params.Arguments
 
 	// Extract operation
@@ -82,24 +78,20 @@ func HandleCalculator(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 		return nil, fmt.Errorf("unsupported operation: %s", operation)
 	}
 
-	toolResult := &mcp.CallToolResult{
+	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.TextContent{
 				Type: "text",
 				Text: resultText,
 			},
 		},
-	}
-
-	// Record the usage stats
-	stats.RecordToolUsage("calculator", startTime, toolResult)
-
-	return toolResult, nil
+	}, nil
 }
 
 // RegisterCalculator registers the calculator tool with the MCP server
 func RegisterCalculator(mcpServer *server.MCPServer) {
-	mcpServer.AddTool(mcp.NewTool("calculator",
+	// Create the tool definition
+	calculatorTool := mcp.NewTool("calculator",
 		mcp.WithDescription("A simple calculator that can perform basic arithmetic operations"),
 		mcp.WithString("operation",
 			mcp.Description("The operation to perform (add, subtract, multiply, divide)"),
@@ -113,5 +105,11 @@ func RegisterCalculator(mcpServer *server.MCPServer) {
 			mcp.Description("Second operand"),
 			mcp.Required(),
 		),
-	), HandleCalculator)
+	)
+
+	// Wrap the handler with stats tracking
+	wrappedHandler := stats.WrapHandler("calculator", HandleCalculator)
+
+	// Register the tool with the wrapped handler
+	mcpServer.AddTool(calculatorTool, wrappedHandler)
 }

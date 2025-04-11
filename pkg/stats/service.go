@@ -74,6 +74,25 @@ func RecordToolUsage(toolName string, startTime time.Time, result *mcp.CallToolR
 	}
 }
 
+// WrapHandler wraps a tool handler with stats tracking
+func WrapHandler(toolName string, handler func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Record the start time
+		startTime := time.Now()
+
+		// Call the original handler
+		result, err := handler(ctx, request)
+		if err != nil {
+			return nil, err
+		}
+
+		// Record the usage
+		RecordToolUsage(toolName, startTime, result)
+
+		return result, nil
+	}
+}
+
 // estimateInputTokens estimates the number of tokens in the request
 func estimateInputTokens(request mcp.CallToolRequest) int {
 	// This is a simple estimation based on the request size
@@ -127,10 +146,16 @@ func RegisterStats(mcpServer *server.MCPServer, dataDir string) error {
 		return err
 	}
 
-	// Register the stats tool
-	mcpServer.AddTool(mcp.NewTool("stats",
+	// Create the tool definition
+	statsTool := mcp.NewTool("stats",
 		mcp.WithDescription("Retrieves usage statistics for MCP tools"),
-	), HandleGetStats)
+	)
+
+	// Wrap the handler with stats tracking
+	wrappedHandler := WrapHandler("stats", HandleGetStats)
+
+	// Register the tool with the wrapped handler
+	mcpServer.AddTool(statsTool, wrappedHandler)
 
 	return nil
 }
