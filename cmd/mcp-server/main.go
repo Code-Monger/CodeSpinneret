@@ -25,6 +25,7 @@ import (
 	"github.com/Code-Monger/CodeSpinneret/pkg/screenshot"
 	"github.com/Code-Monger/CodeSpinneret/pkg/searchreplace"
 	"github.com/Code-Monger/CodeSpinneret/pkg/serverinfo"
+	"github.com/Code-Monger/CodeSpinneret/pkg/spellcheck"
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/Code-Monger/CodeSpinneret/pkg/webfetch"
 	"github.com/Code-Monger/CodeSpinneret/pkg/websearch"
@@ -80,6 +81,7 @@ func main() {
 	linecount.RegisterLineCount(mcpServer)
 	findcallers.RegisterFindCallers(mcpServer)
 	findfunc.RegisterFindFunc(mcpServer)
+	spellcheck.RegisterSpellCheck(mcpServer)
 	funcdef.RegisterFuncDef(mcpServer)
 
 	// Register stats tool

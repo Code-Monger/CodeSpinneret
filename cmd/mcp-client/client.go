@@ -158,6 +158,8 @@ func (c *Client) testTool(ctx context.Context, testTool string, toolsResult *mcp
 		return tools.TestFindFunc(ctx, c.mcpClient)
 	case "funcdef":
 		return tools.TestFuncDef(ctx, c.mcpClient)
+	case "spellcheck":
+		return tools.TestSpellCheck(ctx, c.mcpClient)
 	case "stats":
 		return tools.TestStats(ctx, c.mcpClient)
 	default:
@@ -185,6 +187,7 @@ func (c *Client) testAllTools(ctx context.Context, toolsResult *mcp.ListToolsRes
 		"findcallers",
 		"findfunc",
 		"funcdef",
+		"spellcheck",
 		"stats",
 	}
 
