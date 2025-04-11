@@ -1,4 +1,3 @@
-// Package tools provides test functions for MCP tools
 package tools
 
 import (
@@ -11,11 +10,11 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// TestFuncDefWithComments tests the function definition tool with tricky comments
-func TestFuncDefWithComments(ctx context.Context, c client.MCPClient) error {
+// TestFuncDef tests the function definition tool
+func TestFuncDef(ctx context.Context, c client.MCPClient) error {
 	// Create a temporary test directory
 	tempDir := os.TempDir()
-	testDir := filepath.Join(tempDir, "mcp_test_funcdef_comments")
+	testDir := filepath.Join(tempDir, "mcp_test_funcdef")
 
 	// Create the test directory
 	err := os.MkdirAll(testDir, 0755)
@@ -32,97 +31,53 @@ func TestFuncDefWithComments(ctx context.Context, c client.MCPClient) error {
 
 	log.Printf("Created test directory at: %s", testDir)
 
-	// Create test files with function definitions and tricky comments
+	// Create test files with function definitions
 	testFiles := map[string]string{
-		"test_go_comments.go": `package main
+		"test.go": `package main
 
 import (
 	"fmt"
 )
 
 // calculateSum calculates the sum of two numbers
-// { This comment has a brace that could confuse the parser
 func calculateSum(a, b int) int {
-	// Another comment with a brace }
-	/*
-	   Multi-line comment with braces
-	   {
-	   }
-	*/
-	return a + b // Inline comment with }
+	return a + b
 }
-
-/*
-} This multi-line comment starts with a closing brace
-*/
 
 func main() {
 	result := calculateSum(10, 20)
 	fmt.Println("Result:", result)
 }
 `,
-		"test_cpp_comments.cpp": `#include <iostream>
+		"test.cpp": `#include <iostream>
 
 // Function prototype
-int calculateSum(int a, int b); // { Comment with brace
+int calculateSum(int a, int b);
 
 int main() {
-    // Comment with brace }
     int result = calculateSum(10, 20);
     std::cout << "Result: " << result << std::endl;
     return 0;
 }
 
-/*
-   Multi-line comment with braces
-   {
-   }
-*/
 // Function implementation
 int calculateSum(int a, int b) {
-    /* } Tricky comment with closing brace at start */
-    return a + b; // Inline comment with }
+    return a + b;
 }
 `,
-		"test_js_comments.js": `// JavaScript test file with tricky comments
-
-// Function with comments that have braces
-// { This comment has an opening brace
+		"test.js": `// JavaScript test file
 function calculateSum(a, b) {
-    // } This comment has a closing brace
-    /*
-       Multi-line comment with braces
-       {
-       }
-    */
-    return a + b; // Inline comment with }
+    return a + b;
 }
-
-/*
-} This multi-line comment starts with a closing brace
-*/
 
 // Test the function
 const result = calculateSum(5, 10);
 console.log("Result:", result);
 `,
-		"test_py_comments.py": `# Python test file with tricky comments
-
-# Function with comments that have indentation and braces
-# { This comment has an opening brace
+		"test.py": `# Python test file
 def calculateSum(a, b):
-    """
-    Calculate the sum of two numbers.
-    
-    This docstring has braces:
-    {
-    }
-    """
-    # } This comment has a closing brace
-    return a + b  # Inline comment with }
-
-# This comment is at the same indentation level as the function
-# but shouldn't be considered part of it
+    """Calculate the sum of two numbers."""
+    return a + b
 
 # Test the function
 result = calculateSum(5, 10)
@@ -147,77 +102,92 @@ print("Result:", result)
 		arguments map[string]interface{}
 	}{
 		{
-			name: "Get Go function with tricky comments",
+			name: "Get Go function",
 			arguments: map[string]interface{}{
 				"operation":     "get",
 				"function_name": "calculateSum",
-				"file_path":     filepath.Join(testDir, "test_go_comments.go"),
+				"file_path":     filepath.Join(testDir, "test.go"),
 				"language":      "Go",
 			},
 		},
 		{
-			name: "Get C++ function with tricky comments",
+			name: "Get C++ function with prototype",
 			arguments: map[string]interface{}{
 				"operation":         "get",
 				"function_name":     "calculateSum",
-				"file_path":         filepath.Join(testDir, "test_cpp_comments.cpp"),
+				"file_path":         filepath.Join(testDir, "test.cpp"),
 				"language":          "C/C++",
 				"include_prototype": true,
 			},
 		},
 		{
-			name: "Get JavaScript function with tricky comments",
+			name: "Get JavaScript function",
 			arguments: map[string]interface{}{
 				"operation":     "get",
 				"function_name": "calculateSum",
-				"file_path":     filepath.Join(testDir, "test_js_comments.js"),
-				"language":      "JavaScript",
+				"file_path":     filepath.Join(testDir, "test.js"),
 			},
 		},
 		{
-			name: "Get Python function with tricky comments",
+			name: "Get Python function",
 			arguments: map[string]interface{}{
 				"operation":     "get",
 				"function_name": "calculateSum",
-				"file_path":     filepath.Join(testDir, "test_py_comments.py"),
-				"language":      "Python",
+				"file_path":     filepath.Join(testDir, "test.py"),
 			},
 		},
 		{
-			name: "Replace Go function with tricky comments",
+			name: "Replace Go function",
 			arguments: map[string]interface{}{
 				"operation":     "replace",
 				"function_name": "calculateSum",
-				"file_path":     filepath.Join(testDir, "test_go_comments.go"),
+				"file_path":     filepath.Join(testDir, "test.go"),
 				"language":      "Go",
 				"replacement_content": `// calculateSum calculates the sum of two numbers and adds a bonus
-// { This comment has a brace that could confuse the parser
 func calculateSum(a, b int) int {
-	// Another comment with a brace }
-	/*
-	   Multi-line comment with braces
-	   {
-	   }
-	*/
-	bonus := 5 // New variable
-	return a + b + bonus // Modified return with }
+	bonus := 5
+	return a + b + bonus
 }`,
 			},
 		},
 		{
-			name: "Get replaced Go function with tricky comments",
+			name: "Get replaced Go function",
 			arguments: map[string]interface{}{
 				"operation":     "get",
 				"function_name": "calculateSum",
-				"file_path":     filepath.Join(testDir, "test_go_comments.go"),
+				"file_path":     filepath.Join(testDir, "test.go"),
 				"language":      "Go",
+			},
+		},
+		{
+			name: "Replace C++ function implementation",
+			arguments: map[string]interface{}{
+				"operation":     "replace",
+				"function_name": "calculateSum",
+				"file_path":     filepath.Join(testDir, "test.cpp"),
+				"language":      "C/C++",
+				"replacement_content": `// Function implementation with bonus
+int calculateSum(int a, int b) {
+    int bonus = 5;
+    return a + b + bonus;
+}`,
+			},
+		},
+		{
+			name: "Get replaced C++ function",
+			arguments: map[string]interface{}{
+				"operation":         "get",
+				"function_name":     "calculateSum",
+				"file_path":         filepath.Join(testDir, "test.cpp"),
+				"language":          "C/C++",
+				"include_prototype": true,
 			},
 		},
 	}
 
 	// Run test cases
 	for _, tc := range testCases {
-		log.Printf("Running function definition test with comments: %s", tc.name)
+		log.Printf("Running function definition test: %s", tc.name)
 
 		callReq := mcp.CallToolRequest{}
 		callReq.Params.Name = "funcdef"
@@ -231,7 +201,7 @@ func calculateSum(a, b int) int {
 
 		if len(result.Content) > 0 {
 			if textContent, ok := result.Content[0].(mcp.TextContent); ok {
-				log.Printf("Function definition result with comments:\n%s", textContent.Text)
+				log.Printf("Function definition result:\n%s", textContent.Text)
 			}
 		}
 	}

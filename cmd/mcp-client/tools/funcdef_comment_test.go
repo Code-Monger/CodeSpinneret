@@ -1,4 +1,3 @@
-// Package tools provides test functions for MCP tools
 package tools
 
 import (
@@ -12,6 +11,7 @@ import (
 )
 
 // TestFuncDefWithComments tests the function definition tool with tricky comments
+// This function is exported so it can be called from the client package
 func TestFuncDefWithComments(ctx context.Context, c client.MCPClient) error {
 	// Create a temporary test directory
 	tempDir := os.TempDir()
@@ -44,7 +44,7 @@ import (
 // { This comment has a brace that could confuse the parser
 func calculateSum(a, b int) int {
 	// Another comment with a brace }
-	/*
+	/* 
 	   Multi-line comment with braces
 	   {
 	   }
@@ -52,7 +52,7 @@ func calculateSum(a, b int) int {
 	return a + b // Inline comment with }
 }
 
-/*
+/* 
 } This multi-line comment starts with a closing brace
 */
 
@@ -73,7 +73,7 @@ int main() {
     return 0;
 }
 
-/*
+/* 
    Multi-line comment with braces
    {
    }
@@ -90,7 +90,7 @@ int calculateSum(int a, int b) {
 // { This comment has an opening brace
 function calculateSum(a, b) {
     // } This comment has a closing brace
-    /*
+    /* 
        Multi-line comment with braces
        {
        }
@@ -98,7 +98,7 @@ function calculateSum(a, b) {
     return a + b; // Inline comment with }
 }
 
-/*
+/* 
 } This multi-line comment starts with a closing brace
 */
 
@@ -194,7 +194,7 @@ print("Result:", result)
 // { This comment has a brace that could confuse the parser
 func calculateSum(a, b int) int {
 	// Another comment with a brace }
-	/*
+	/* 
 	   Multi-line comment with braces
 	   {
 	   }
