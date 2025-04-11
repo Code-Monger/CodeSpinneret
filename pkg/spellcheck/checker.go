@@ -181,7 +181,7 @@ func checkTextForSpellingErrors(text string, lineNumber, columnOffset int, textT
 
 // isMisspelled checks if a word is misspelled
 func isMisspelled(word, dictionaryType string) bool {
-	// This is an enhanced implementation with better spell checking
+	// This is an enhanced implementation with better spell checking using the fuzzy model
 
 	// Convert to lowercase for case-insensitive comparison
 	lowerWord := strings.ToLower(word)
@@ -241,42 +241,47 @@ func isMisspelled(word, dictionaryType string) bool {
 
 // getSuggestions gets spelling suggestions for a misspelled word
 func getSuggestions(word, dictionaryType string) []string {
-	// This is a simplified implementation
-	// In a real implementation, this would use a proper spell checking library
-	// or call an external API
+	// Use the fuzzy model to get suggestions
+	model := getFuzzyModel()
 
-	// For demo purposes, we'll just return some simple suggestions
-	lowerWord := strings.ToLower(word)
+	// Get suggestions from the fuzzy model
+	suggestions := model.SpellCheckSuggestions(strings.ToLower(word), 5)
 
-	// Check for common misspellings
-	commonMisspellings := map[string][]string{
-		"coment":    {"comment"},
-		"speling":   {"spelling"},
-		"mesage":    {"message"},
-		"acount":    {"account"},
-		"messge":    {"message"},
-		"mispelled": {"misspelled"},
+	// If we didn't get any suggestions from the fuzzy model, fall back to our hardcoded suggestions
+	if len(suggestions) == 0 {
+		// Check for common misspellings
+		commonMisspellings := map[string][]string{
+			"coment":    {"comment"},
+			"speling":   {"spelling"},
+			"mesage":    {"message"},
+			"acount":    {"account"},
+			"messge":    {"message"},
+			"mispelled": {"misspelled"},
+		}
+
+		lowerWord := strings.ToLower(word)
+		if hardcodedSuggestions, ok := commonMisspellings[lowerWord]; ok {
+			return hardcodedSuggestions
+		}
+
+		// Otherwise, generate some simple suggestions
+		var fallbackSuggestions []string
+
+		// Add 'e' if the word ends with a consonant
+		if len(word) > 2 && !isVowel(rune(word[len(word)-1])) {
+			fallbackSuggestions = append(fallbackSuggestions, word+"e")
+		}
+
+		// Double the last letter
+		if len(word) > 2 {
+			fallbackSuggestions = append(fallbackSuggestions, word+string(word[len(word)-1]))
+		}
+
+		// Add common suffixes
+		fallbackSuggestions = append(fallbackSuggestions, word+"s", word+"ed", word+"ing")
+
+		return fallbackSuggestions
 	}
-
-	if suggestions, ok := commonMisspellings[lowerWord]; ok {
-		return suggestions
-	}
-
-	// Otherwise, generate some simple suggestions
-	var suggestions []string
-
-	// Add 'e' if the word ends with a consonant
-	if len(word) > 2 && !isVowel(rune(word[len(word)-1])) {
-		suggestions = append(suggestions, word+"e")
-	}
-
-	// Double the last letter
-	if len(word) > 2 {
-		suggestions = append(suggestions, word+string(word[len(word)-1]))
-	}
-
-	// Add common suffixes
-	suggestions = append(suggestions, word+"s", word+"ed", word+"ing")
 
 	return suggestions
 }

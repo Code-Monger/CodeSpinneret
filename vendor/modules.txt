@@ -6,6 +6,9 @@ github.com/google/uuid
 github.com/mark3labs/mcp-go/client
 github.com/mark3labs/mcp-go/mcp
 github.com/mark3labs/mcp-go/server
+# github.com/sajari/fuzzy v1.0.0
+## explicit
+github.com/sajari/fuzzy
 # github.com/yosida95/uritemplate/v3 v3.0.2
 ## explicit; go 1.14
 github.com/yosida95/uritemplate/v3

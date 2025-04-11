@@ -2,6 +2,9 @@ package spellcheck
 
 // getCommonWords returns a map of common English words
 func getCommonWords() map[string]bool {
+	// Initialize the fuzzy model (this will load the embedded dictionary)
+	getFuzzyModel()
+
 	// Load words from the embedded dictionary
 	commonWords := loadEmbeddedDictionary()
 
