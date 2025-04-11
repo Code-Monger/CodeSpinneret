@@ -111,6 +111,7 @@ Both the server and client support various command-line flags for configuration:
 
 - **Calculator**: Performs basic arithmetic operations (add, subtract, multiply, divide)
 - **File Search**: Searches for files based on various criteria like name patterns, content, size, and modification time
+- **Command Execution**: Executes commands on the system, such as running scripts, compiling code, or starting applications
 
 ### Resources
 

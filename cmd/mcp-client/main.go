@@ -16,7 +16,7 @@ import (
 var (
 	serverURL   = flag.String("server", "http://localhost:8080", "MCP server URL")
 	timeoutSecs = flag.Int("timeout", 60, "Client timeout in seconds")
-	testTool    = flag.String("tool", "calculator", "Tool to test (calculator, filesearch)")
+	testTool    = flag.String("tool", "calculator", "Tool to test (calculator, filesearch, cmdexec)")
 )
 
 func main() {
@@ -123,6 +123,21 @@ func main() {
 		} else {
 			log.Println("File search tool not found on server")
 		}
+	case "cmdexec":
+		found := false
+		for _, tool := range toolsResult.Tools {
+			if tool.Name == "cmdexec" {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			log.Println("Testing command execution tool...")
+			testCommandExecution(signalCtx, sseClient)
+		} else {
+			log.Println("Command execution tool not found on server")
+		}
 	}
 
 	// Read server info resource if available
@@ -177,6 +192,61 @@ func testCalculator(ctx context.Context, c client.MCPClient) {
 				log.Printf("Calculator %s result: %s", op.op, textContent.Text)
 			}
 		}
+	}
+}
+
+// testCommandExecution tests the command execution tool with various commands
+func testCommandExecution(ctx context.Context, c client.MCPClient) {
+	// Define test cases
+	testCases := []struct {
+		name      string
+		arguments map[string]interface{}
+	}{
+		{
+			name: "Simple echo command",
+			arguments: map[string]interface{}{
+				"command": "echo Hello, World!",
+				"timeout": 5.0,
+			},
+		},
+		{
+			name: "Directory listing",
+			arguments: map[string]interface{}{
+				"command": "dir",
+				"timeout": 5.0,
+			},
+		},
+		{
+			name: "Current working directory",
+			arguments: map[string]interface{}{
+				"command": "cd",
+				"timeout": 5.0,
+			},
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		log.Printf("Running command execution test: %s", tc.name)
+
+		callReq := mcp.CallToolRequest{}
+		callReq.Params.Name = "cmdexec"
+		callReq.Params.Arguments = tc.arguments
+
+		result, err := c.CallTool(ctx, callReq)
+		if err != nil {
+			log.Printf("Failed to call cmdexec: %v", err)
+			continue
+		}
+
+		if len(result.Content) > 0 {
+			if textContent, ok := result.Content[0].(mcp.TextContent); ok {
+				log.Printf("Command execution result:\n%s", textContent.Text)
+			}
+		}
+
+		// Add a small delay between tests
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
