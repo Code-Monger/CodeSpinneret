@@ -136,6 +136,8 @@ func (c *Client) testTool(ctx context.Context, testTool string, toolsResult *mcp
 		return tools.TestScreenshot(ctx, c.mcpClient)
 	case "websearch":
 		return tools.TestWebSearch(ctx, c.mcpClient)
+	case "webfetch":
+		return tools.TestWebFetch(ctx, c.mcpClient)
 	case "rag":
 		return tools.TestRAG(ctx, c.mcpClient)
 	case "codeanalysis":

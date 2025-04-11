@@ -11,13 +11,14 @@ import (
 
 // TestWebSearch tests the web search tool with various queries
 func TestWebSearch(ctx context.Context, c client.MCPClient) error {
-	// Define test cases
+	// Define test cases - focusing on all three search engines with different queries
 	testCases := []struct {
 		name      string
 		arguments map[string]interface{}
 	}{
+		// DuckDuckGo tests
 		{
-			name: "Basic search",
+			name: "DuckDuckGo - Programming search",
 			arguments: map[string]interface{}{
 				"query":       "golang programming",
 				"num_results": 5.0,
@@ -26,11 +27,60 @@ func TestWebSearch(ctx context.Context, c client.MCPClient) error {
 			},
 		},
 		{
-			name: "Alternative search engine",
+			name: "DuckDuckGo - Technology search",
 			arguments: map[string]interface{}{
 				"query":       "artificial intelligence",
-				"num_results": 3.0,
+				"num_results": 5.0,
+				"engine":      "duckduckgo",
+				"safe_search": true,
+			},
+		},
+
+		// Bing tests
+		{
+			name: "Bing - Programming search",
+			arguments: map[string]interface{}{
+				"query":       "golang programming",
+				"num_results": 5.0,
 				"engine":      "bing",
+				"safe_search": true,
+			},
+		},
+		{
+			name: "Bing - Technology search",
+			arguments: map[string]interface{}{
+				"query":       "artificial intelligence",
+				"num_results": 5.0,
+				"engine":      "bing",
+				"safe_search": true,
+			},
+		},
+
+		// Google tests
+		{
+			name: "Google - Programming search",
+			arguments: map[string]interface{}{
+				"query":       "golang programming",
+				"num_results": 5.0,
+				"engine":      "google",
+				"safe_search": true,
+			},
+		},
+		{
+			name: "Google - Technology search",
+			arguments: map[string]interface{}{
+				"query":       "artificial intelligence",
+				"num_results": 5.0,
+				"engine":      "google",
+				"safe_search": true,
+			},
+		},
+		{
+			name: "Google - Science search",
+			arguments: map[string]interface{}{
+				"query":       "quantum physics",
+				"num_results": 5.0,
+				"engine":      "google",
 				"safe_search": true,
 			},
 		},
@@ -38,7 +88,7 @@ func TestWebSearch(ctx context.Context, c client.MCPClient) error {
 
 	// Run test cases
 	for _, tc := range testCases {
-		log.Printf("Running web search test: %s", tc.name)
+		log.Printf("Running search test: %s", tc.name)
 
 		callReq := mcp.CallToolRequest{}
 		callReq.Params.Name = "websearch"
@@ -52,12 +102,12 @@ func TestWebSearch(ctx context.Context, c client.MCPClient) error {
 
 		if len(result.Content) > 0 {
 			if textContent, ok := result.Content[0].(mcp.TextContent); ok {
-				log.Printf("Web search result:\n%s", textContent.Text)
+				log.Printf("Search result:\n%s", textContent.Text)
 			}
 		}
 
 		// Add a small delay between tests
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 
 	return nil

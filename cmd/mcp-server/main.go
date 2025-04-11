@@ -22,6 +22,7 @@ import (
 	"github.com/Code-Monger/CodeSpinneret/pkg/searchreplace"
 	"github.com/Code-Monger/CodeSpinneret/pkg/serverinfo"
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
+	"github.com/Code-Monger/CodeSpinneret/pkg/webfetch"
 	"github.com/Code-Monger/CodeSpinneret/pkg/websearch"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -43,10 +44,6 @@ func main() {
 	if err := os.MkdirAll(*dataDir, 0755); err != nil {
 		log.Fatalf("Failed to create data directory: %v", err)
 	}
-
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutSecs)*time.Second)
-	defer cancel()
 
 	// Create the MCP server
 	mcpServer := server.NewMCPServer(
@@ -72,6 +69,7 @@ func main() {
 	searchreplace.RegisterSearchReplace(mcpServer)
 	screenshot.RegisterScreenshot(mcpServer)
 	websearch.RegisterWebSearch(mcpServer)
+	webfetch.Register(mcpServer)
 	rag.RegisterRAG(mcpServer)
 	codeanalysis.RegisterCodeAnalysis(mcpServer)
 	patch.RegisterPatch(mcpServer)
@@ -101,35 +99,29 @@ func main() {
 	}
 
 	// Set up signal handling for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	// Start the server in a goroutine
 	go func() {
 		log.Printf("Starting MCP server on port %d...", *port)
 		log.Printf("Base URL: %s", baseURLValue)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
 
-	// Wait for termination signal or context timeout
-	select {
-	case sig := <-sigChan:
-		log.Printf("Received signal: %v", sig)
-	case <-ctx.Done():
-		log.Printf("Server timeout reached")
-	}
+	// Wait for interrupt signal
+	<-stop
 
-	// Create a shutdown context with a timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Create a deadline for shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 
-	// Perform graceful shutdown
+	// Shutdown the server
 	log.Println("Shutting down server...")
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("Server shutdown error: %v", err)
+		log.Fatalf("Server shutdown failed: %v", err)
 	}
-
-	log.Println("Server shutdown complete")
+	log.Println("Server stopped")
 }
