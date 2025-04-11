@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/calculator"
+	"github.com/Code-Monger/CodeSpinneret/pkg/filesearch"
 	"github.com/Code-Monger/CodeSpinneret/pkg/serverinfo"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -46,6 +47,7 @@ func main() {
 	// Register tools and resources
 	calculator.RegisterCalculator(mcpServer)
 	serverinfo.RegisterServerInfo(mcpServer)
+	filesearch.RegisterFileSearch(mcpServer)
 
 	// Create the SSE server
 	baseURLValue := *baseURL

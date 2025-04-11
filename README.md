@@ -110,6 +110,7 @@ Both the server and client support various command-line flags for configuration:
 ### Tools
 
 - **Calculator**: Performs basic arithmetic operations (add, subtract, multiply, divide)
+- **File Search**: Searches for files based on various criteria like name patterns, content, size, and modification time
 
 ### Resources
 

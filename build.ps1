@@ -4,7 +4,8 @@ param (
     [string]$Target = "build",
     [int]$Port = 8080,
     [int]$Timeout = 60,
-    [string]$BaseURL = ""
+    [string]$BaseURL = "",
+    [string]$TestTool = "calculator"
 )
 
 # Configuration
@@ -165,7 +166,8 @@ function Run-Client {
 function Run-Demo {
     param (
         [int]$Port = 8080,
-        [int]$Timeout = $DemoTimeout
+        [int]$Timeout = $DemoTimeout,
+        [string]$Tool = "calculator"
     )
     
     Write-Status "Starting demo mode (server and client)..." $InfoColor
@@ -192,7 +194,7 @@ function Run-Demo {
     
     # Run client
     Write-Status "Starting client..." $InfoColor
-    & $ClientBin -server $serverURL -timeout 30
+    & $ClientBin -server $serverURL -timeout 30 -tool $Tool
     
     # Stop server
     Write-Status "Stopping server..." $InfoColor
@@ -274,7 +276,7 @@ switch ($Target) {
     }
     "demo" {
         if (Build-Server -and Build-Client) {
-            Run-Demo -Port $Port -Timeout $Timeout
+            Run-Demo -Port $Port -Timeout $Timeout -Tool $TestTool
         }
     }
     "update-deps" {

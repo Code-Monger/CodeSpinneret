@@ -16,7 +16,7 @@ import (
 var (
 	serverURL   = flag.String("server", "http://localhost:8080", "MCP server URL")
 	timeoutSecs = flag.Int("timeout", 60, "Client timeout in seconds")
-	testTool    = flag.String("tool", "calculator", "Tool to test")
+	testTool    = flag.String("tool", "calculator", "Tool to test (calculator, filesearch)")
 )
 
 func main() {
@@ -91,8 +91,9 @@ func main() {
 		}
 	}
 
-	// Test the calculator tool if available
-	if *testTool == "calculator" {
+	// Test the specified tool if available
+	switch *testTool {
+	case "calculator":
 		found := false
 		for _, tool := range toolsResult.Tools {
 			if tool.Name == "calculator" {
@@ -106,6 +107,21 @@ func main() {
 			testCalculator(signalCtx, sseClient)
 		} else {
 			log.Println("Calculator tool not found on server")
+		}
+	case "filesearch":
+		found := false
+		for _, tool := range toolsResult.Tools {
+			if tool.Name == "filesearch" {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			log.Println("Testing file search tool...")
+			testFileSearch(signalCtx, sseClient)
+		} else {
+			log.Println("File search tool not found on server")
 		}
 	}
 
@@ -179,5 +195,64 @@ func readServerInfo(ctx context.Context, c client.MCPClient) {
 		if textContent, ok := result.Contents[0].(mcp.TextResourceContents); ok {
 			log.Printf("Server Info:\n%s", textContent.Text)
 		}
+	}
+}
+
+// testFileSearch tests the file search tool with various search criteria
+func testFileSearch(ctx context.Context, c client.MCPClient) {
+	// Define test cases
+	testCases := []struct {
+		name      string
+		arguments map[string]interface{}
+	}{
+		{
+			name: "Basic directory listing",
+			arguments: map[string]interface{}{
+				"directory": ".",
+				"pattern":   "*.go",
+				"recursive": false,
+			},
+		},
+		{
+			name: "Recursive search",
+			arguments: map[string]interface{}{
+				"directory": ".",
+				"pattern":   "*.go",
+				"recursive": true,
+			},
+		},
+		{
+			name: "Content search",
+			arguments: map[string]interface{}{
+				"directory":       ".",
+				"pattern":         "*.go",
+				"recursive":       true,
+				"content_pattern": "func.*\\(",
+			},
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		log.Printf("Running file search test: %s", tc.name)
+
+		callReq := mcp.CallToolRequest{}
+		callReq.Params.Name = "filesearch"
+		callReq.Params.Arguments = tc.arguments
+
+		result, err := c.CallTool(ctx, callReq)
+		if err != nil {
+			log.Printf("Failed to call filesearch: %v", err)
+			continue
+		}
+
+		if len(result.Content) > 0 {
+			if textContent, ok := result.Content[0].(mcp.TextContent); ok {
+				log.Printf("File search result:\n%s", textContent.Text)
+			}
+		}
+
+		// Add a small delay between tests
+		time.Sleep(500 * time.Millisecond)
 	}
 }
