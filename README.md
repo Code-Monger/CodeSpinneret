@@ -150,8 +150,9 @@ Both the server and client support various command-line flags for configuration:
 - `-test-tool`: Specific tool to test in demo mode (used with the demo target)
 
 ## Implemented Components
-
 ### Tools
+
+The following tools are registered and available in the MCP server:
 
 - **Calculator**: Performs basic arithmetic operations (add, subtract, multiply, divide)
 - **File Search**: Searches for files based on various criteria like name patterns, content, size, and modification time
@@ -168,6 +169,9 @@ Both the server and client support various command-line flags for configuration:
 - **FindCallers**: Finds all callers of a specified function across a codebase. Supports multiple programming languages including Go, JavaScript, Python, Java, C#, C/C++, Ruby, and PHP. Returns detailed results with file paths, line numbers, and context for each call.
 - **FindFunc**: Finds function definitions across a codebase by name and returns their locations. Supports multiple programming languages and can filter by package name.
 - **FuncDef**: Gets or replaces function definitions in source code files across multiple programming languages. Handles complex code patterns including nested functions, comments, and string literals.
+- **LineCount**: Counts lines, words, and characters in a file, similar to the Unix 'wc' command. Provides detailed statistics about file content with configurable counting options.
+
+Note: While all these tools are registered in the server code, the server logs may only show a subset of these tools being registered during startup, depending on the logging configuration.
 - **LineCount**: Counts lines, words, and characters in a file, similar to the Unix 'wc' command. Provides detailed statistics about file content with configurable counting options.
 
 ### Resources

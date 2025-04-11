@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -325,4 +326,7 @@ func RegisterSearchReplace(mcpServer *server.MCPServer) {
 
 	// Register the tool with the wrapped handler
 	mcpServer.AddTool(searchReplaceTool, wrappedHandler)
+
+	// Log the registration
+	log.Printf("[SearchReplace] Registered searchreplace tool")
 }

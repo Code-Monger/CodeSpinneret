@@ -3,6 +3,7 @@ package filesearch
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -295,4 +296,7 @@ func RegisterFileSearch(mcpServer *server.MCPServer) {
 
 	// Register the tool with the wrapped handler
 	mcpServer.AddTool(fileSearchTool, wrappedHandler)
+
+	// Log the registration
+	log.Printf("[FileSearch] Registered filesearch tool")
 }

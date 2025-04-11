@@ -3,6 +3,7 @@ package codeanalysis
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -330,4 +331,7 @@ func RegisterCodeAnalysis(mcpServer *server.MCPServer) {
 
 	// Register the tool with the wrapped handler
 	mcpServer.AddTool(codeAnalysisTool, wrappedHandler)
+
+	// Log the registration
+	log.Printf("[CodeAnalysis] Registered codeanalysis tool")
 }

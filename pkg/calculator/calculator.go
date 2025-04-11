@@ -3,6 +3,7 @@ package calculator
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
@@ -112,4 +113,7 @@ func RegisterCalculator(mcpServer *server.MCPServer) {
 
 	// Register the tool with the wrapped handler
 	mcpServer.AddTool(calculatorTool, wrappedHandler)
+
+	// Log the registration
+	log.Printf("[Calculator] Registered calculator tool")
 }

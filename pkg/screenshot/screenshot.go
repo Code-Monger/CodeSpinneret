@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -284,4 +285,7 @@ func RegisterScreenshot(mcpServer *server.MCPServer) {
 
 	// Register the tool with the wrapped handler
 	mcpServer.AddTool(screenshotTool, wrappedHandler)
+
+	// Log the registration
+	log.Printf("[Screenshot] Registered screenshot tool")
 }

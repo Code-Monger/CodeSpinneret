@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"os/exec"
 	"runtime"
 	"time"
@@ -124,4 +125,7 @@ func RegisterCommandExecution(mcpServer *server.MCPServer) {
 
 	// Register the tool with the wrapped handler
 	mcpServer.AddTool(cmdexecTool, wrappedHandler)
+
+	// Log the registration
+	log.Printf("[CmdExec] Registered cmdexec tool")
 }

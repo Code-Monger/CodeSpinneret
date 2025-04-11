@@ -3,6 +3,7 @@ package patch
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -404,4 +405,7 @@ func RegisterPatch(mcpServer *server.MCPServer) {
 
 	// Register the tool with the wrapped handler
 	mcpServer.AddTool(patchTool, wrappedHandler)
+
+	// Log the registration
+	log.Printf("[Patch] Registered patch tool")
 }
