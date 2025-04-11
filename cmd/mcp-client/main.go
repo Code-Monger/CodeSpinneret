@@ -1,0 +1,183 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/mcp"
+)
+
+var (
+	serverURL   = flag.String("server", "http://localhost:8080", "MCP server URL")
+	timeoutSecs = flag.Int("timeout", 60, "Client timeout in seconds")
+	testTool    = flag.String("tool", "calculator", "Tool to test")
+)
+
+func main() {
+	flag.Parse()
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutSecs)*time.Second)
+	defer cancel()
+
+	// Set up signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Create a context cancellation for signal handling
+	signalCtx, signalCancel := context.WithCancel(context.Background())
+	defer signalCancel()
+
+	// Handle termination signals
+	go func() {
+		select {
+		case sig := <-sigChan:
+			log.Printf("Received signal: %v", sig)
+			signalCancel()
+		case <-ctx.Done():
+			log.Printf("Client timeout reached")
+		}
+	}()
+
+	// Create the SSE client
+	log.Printf("Connecting to MCP server at %s...", *serverURL)
+	sseClient, err := client.NewSSEMCPClient(*serverURL)
+	if err != nil {
+		log.Fatalf("Failed to create SSE client: %v", err)
+	}
+
+	// Start the client
+	if err := sseClient.Start(signalCtx); err != nil {
+		log.Fatalf("Failed to start SSE client: %v", err)
+	}
+
+	// Initialize the client
+	initReq := mcp.InitializeRequest{}
+	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+
+	initResult, err := sseClient.Initialize(signalCtx, initReq)
+	if err != nil {
+		log.Fatalf("Failed to initialize client: %v", err)
+	}
+
+	log.Printf("Connected to server successfully")
+	log.Printf("Server capabilities: %+v", initResult.Capabilities)
+
+	// List available resources
+	resourcesResult, err := sseClient.ListResources(signalCtx, mcp.ListResourcesRequest{})
+	if err != nil {
+		log.Printf("Failed to list resources: %v", err)
+	} else {
+		log.Printf("Available resources (%d):", len(resourcesResult.Resources))
+		for _, resource := range resourcesResult.Resources {
+			log.Printf("  - %s (%s)", resource.Name, resource.URI)
+		}
+	}
+
+	// List available tools
+	toolsResult, err := sseClient.ListTools(signalCtx, mcp.ListToolsRequest{})
+	if err != nil {
+		log.Printf("Failed to list tools: %v", err)
+	} else {
+		log.Printf("Available tools (%d):", len(toolsResult.Tools))
+		for _, tool := range toolsResult.Tools {
+			log.Printf("  - %s: %s", tool.Name, tool.Description)
+		}
+	}
+
+	// Test the calculator tool if available
+	if *testTool == "calculator" {
+		found := false
+		for _, tool := range toolsResult.Tools {
+			if tool.Name == "calculator" {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			log.Println("Testing calculator tool...")
+			testCalculator(signalCtx, sseClient)
+		} else {
+			log.Println("Calculator tool not found on server")
+		}
+	}
+
+	// Read server info resource if available
+	found := false
+	for _, resource := range resourcesResult.Resources {
+		if resource.URI == "server://info" {
+			found = true
+			break
+		}
+	}
+
+	if found {
+		log.Println("Reading server info resource...")
+		readServerInfo(signalCtx, sseClient)
+	} else {
+		log.Println("Server info resource not found on server")
+	}
+
+	log.Println("Client operations completed successfully")
+}
+
+// testCalculator tests the calculator tool with various operations
+func testCalculator(ctx context.Context, c client.MCPClient) {
+	operations := []struct {
+		op string
+		a  float64
+		b  float64
+	}{
+		{"add", 5, 3},
+		{"subtract", 10, 4},
+		{"multiply", 6, 7},
+		{"divide", 20, 5},
+	}
+
+	for _, op := range operations {
+		callReq := mcp.CallToolRequest{}
+		callReq.Params.Name = "calculator"
+		callReq.Params.Arguments = map[string]interface{}{
+			"operation": op.op,
+			"a":         op.a,
+			"b":         op.b,
+		}
+
+		result, err := c.CallTool(ctx, callReq)
+		if err != nil {
+			log.Printf("Failed to call calculator with %s: %v", op.op, err)
+			continue
+		}
+
+		if len(result.Content) > 0 {
+			if textContent, ok := result.Content[0].(mcp.TextContent); ok {
+				log.Printf("Calculator %s result: %s", op.op, textContent.Text)
+			}
+		}
+	}
+}
+
+// readServerInfo reads the server info resource
+func readServerInfo(ctx context.Context, c client.MCPClient) {
+	readReq := mcp.ReadResourceRequest{}
+	readReq.Params.URI = "server://info"
+
+	result, err := c.ReadResource(ctx, readReq)
+	if err != nil {
+		log.Printf("Failed to read server info: %v", err)
+		return
+	}
+
+	if len(result.Contents) > 0 {
+		if textContent, ok := result.Contents[0].(mcp.TextResourceContents); ok {
+			log.Printf("Server Info:\n%s", textContent.Text)
+		}
+	}
+}
