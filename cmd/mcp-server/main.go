@@ -13,6 +13,7 @@ import (
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/calculator"
 	"github.com/Code-Monger/CodeSpinneret/pkg/cmdexec"
+	"github.com/Code-Monger/CodeSpinneret/pkg/codeanalysis"
 	"github.com/Code-Monger/CodeSpinneret/pkg/filesearch"
 	"github.com/Code-Monger/CodeSpinneret/pkg/rag"
 	"github.com/Code-Monger/CodeSpinneret/pkg/screenshot"
@@ -58,6 +59,7 @@ func main() {
 	screenshot.RegisterScreenshot(mcpServer)
 	websearch.RegisterWebSearch(mcpServer)
 	rag.RegisterRAG(mcpServer)
+	codeanalysis.RegisterCodeAnalysis(mcpServer)
 
 	// Create the SSE server
 	baseURLValue := *baseURL
