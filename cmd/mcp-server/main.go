@@ -16,6 +16,7 @@ import (
 	"github.com/Code-Monger/CodeSpinneret/pkg/cmdexec"
 	"github.com/Code-Monger/CodeSpinneret/pkg/codeanalysis"
 	"github.com/Code-Monger/CodeSpinneret/pkg/filesearch"
+	"github.com/Code-Monger/CodeSpinneret/pkg/linecount"
 	"github.com/Code-Monger/CodeSpinneret/pkg/patch"
 	"github.com/Code-Monger/CodeSpinneret/pkg/rag"
 	"github.com/Code-Monger/CodeSpinneret/pkg/screenshot"
@@ -73,6 +74,7 @@ func main() {
 	rag.RegisterRAG(mcpServer)
 	codeanalysis.RegisterCodeAnalysis(mcpServer)
 	patch.RegisterPatch(mcpServer)
+	linecount.RegisterLineCount(mcpServer)
 
 	// Register stats tool
 	if err := stats.RegisterStats(mcpServer, *dataDir); err != nil {
