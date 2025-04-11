@@ -62,8 +62,13 @@ func HandleCommandExecution(ctx context.Context, request mcp.CallToolRequest) (*
 	// Prepare the result
 	var resultText string
 	if err != nil {
-		// Include the error in the result
-		resultText = fmt.Sprintf("Command execution failed: %v\n\n", err)
+		// Check if the error is due to context timeout
+		if execCtx.Err() == context.DeadlineExceeded {
+			resultText = fmt.Sprintf("Command execution timed out after %v seconds\n\n", timeoutSec)
+		} else {
+			// Include the error in the result
+			resultText = fmt.Sprintf("Command execution failed: %v\n\n", err)
+		}
 	} else {
 		resultText = "Command executed successfully\n\n"
 	}

@@ -37,6 +37,13 @@ func TestCommandExecution(ctx context.Context, c client.MCPClient) error {
 				"timeout": 5.0,
 			},
 		},
+		{
+			name: "Test timeout functionality",
+			arguments: map[string]interface{}{
+				"command": "ping -n 10 127.0.0.1", // This command will take about 10 seconds
+				"timeout": 2.0,                    // But we set timeout to 2 seconds
+			},
+		},
 	}
 
 	// Run test cases
