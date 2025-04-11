@@ -16,6 +16,7 @@ import (
 	"github.com/Code-Monger/CodeSpinneret/pkg/cmdexec"
 	"github.com/Code-Monger/CodeSpinneret/pkg/codeanalysis"
 	"github.com/Code-Monger/CodeSpinneret/pkg/filesearch"
+	"github.com/Code-Monger/CodeSpinneret/pkg/findcallers"
 	"github.com/Code-Monger/CodeSpinneret/pkg/linecount"
 	"github.com/Code-Monger/CodeSpinneret/pkg/patch"
 	"github.com/Code-Monger/CodeSpinneret/pkg/rag"
@@ -75,6 +76,7 @@ func main() {
 	codeanalysis.RegisterCodeAnalysis(mcpServer)
 	patch.RegisterPatch(mcpServer)
 	linecount.RegisterLineCount(mcpServer)
+	findcallers.RegisterFindCallers(mcpServer)
 
 	// Register stats tool
 	if err := stats.RegisterStats(mcpServer, *dataDir); err != nil {

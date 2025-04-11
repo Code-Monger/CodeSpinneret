@@ -152,6 +152,8 @@ func (c *Client) testTool(ctx context.Context, testTool string, toolsResult *mcp
 		return tools.TestPatch(ctx, c.mcpClient)
 	case "linecount":
 		return tools.TestLineCount(ctx, c.mcpClient)
+	case "findcallers":
+		return tools.TestFindCallers(ctx, c.mcpClient)
 	case "stats":
 		return tools.TestStats(ctx, c.mcpClient)
 	default:
@@ -176,6 +178,7 @@ func (c *Client) testAllTools(ctx context.Context, toolsResult *mcp.ListToolsRes
 		"codeanalysis",
 		"patch",
 		"linecount",
+		"findcallers",
 		"stats",
 	}
 
