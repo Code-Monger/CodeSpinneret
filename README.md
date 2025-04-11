@@ -115,6 +115,7 @@ Both the server and client support various command-line flags for configuration:
 - **Search Replace**: Finds and replaces text in files, with support for regular expressions and batch operations
 - **Screenshot**: Takes screenshots of the screen, windows, or specific regions
 - **Web Search**: Performs web searches to find information online, allowing AI models to access up-to-date information
+- **Web Fetch**: Fetches the content of a web page given a URL, with options to include/exclude images and set timeout
 - **RAG (Retrieval Augmented Generation)**: Provides AI-powered code assistance by retrieving relevant code snippets and generating contextual responses
 - **Code Analysis**: Analyzes code to provide insights, metrics, and suggestions for improvement
 - **Patch**: Applies patches to files using the standard unified diff format, supporting various options like strip level and dry run
