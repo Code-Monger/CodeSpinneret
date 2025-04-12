@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
+	workspace "github.com/Code-Monger/CodeSpinneret/pkg/workspace"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -13,6 +15,15 @@ import (
 // HandleRAG is the handler function for the RAG tool
 func HandleRAG(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	arguments := request.Params.Arguments
+
+	// Extract session ID
+	sessionID, _ := arguments["session_id"].(string)
+
+	// Check if workspace is initialized
+	_, exists := workspace.GetWorkspaceInfo(sessionID)
+	if !exists {
+		return nil, fmt.Errorf("workspace not initialized: please call the workspace tool with operation='initialize' first to create a session")
+	}
 
 	// Extract operation
 	operation, ok := arguments["operation"].(string)
@@ -27,6 +38,11 @@ func HandleRAG(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolR
 		if !ok {
 			return nil, fmt.Errorf("repo_path must be a string")
 		}
+
+		// Resolve repository path against workspace root directory
+		workspaceInfo, _ := workspace.GetWorkspaceInfo(sessionID)
+		repoPath = filepath.Join(workspaceInfo.RootDir, repoPath)
+		log.Printf("[RAG] Using repository path: %s", repoPath)
 
 		// Extract file patterns
 		var filePatterns []string
@@ -77,6 +93,11 @@ func HandleRAG(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolR
 		if !ok {
 			return nil, fmt.Errorf("repo_path must be a string")
 		}
+
+		// Resolve repository path against workspace root directory
+		workspaceInfo, _ := workspace.GetWorkspaceInfo(sessionID)
+		repoPath = filepath.Join(workspaceInfo.RootDir, repoPath)
+		log.Printf("[RAG] Using repository path: %s", repoPath)
 
 		// Extract query
 		query, ok := arguments["query"].(string)
@@ -130,13 +151,17 @@ func HandleRAG(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolR
 func RegisterRAG(mcpServer *server.MCPServer) {
 	// Create the tool definition
 	ragTool := mcp.NewTool("rag",
-		mcp.WithDescription("Provides AI-powered code assistance using Retrieval Augmented Generation (RAG), which combines information retrieval with generative AI"),
+		mcp.WithDescription("Provides AI-powered code assistance using Retrieval Augmented Generation (RAG), which combines information retrieval with generative AI. Requires workspace initialization before use."),
 		mcp.WithString("operation",
 			mcp.Description("Operation to perform: 'index' to index a repository, 'query' to query the repository"),
 			mcp.Required(),
 		),
 		mcp.WithString("repo_path",
 			mcp.Description("Path to the repository"),
+			mcp.Required(),
+		),
+		mcp.WithString("session_id",
+			mcp.Description("Session ID to use for workspace initialization. Must be initialized with the workspace tool before using RAG."),
 			mcp.Required(),
 		),
 		mcp.WithArray("file_patterns",

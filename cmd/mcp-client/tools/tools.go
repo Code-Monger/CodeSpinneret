@@ -11,8 +11,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// TestFuncDefWithComments tests the function definition tool with tricky comments
-func TestFuncDefWithComments(ctx context.Context, c client.MCPClient) error {
+// TestFuncDefWithCommentsInternal tests the function definition tool with tricky comments
+func TestFuncDefWithCommentsInternal(ctx context.Context, c client.MCPClient) error {
 	// Create a temporary test directory
 	tempDir := os.TempDir()
 	testDir := filepath.Join(tempDir, "mcp_test_funcdef_comments")

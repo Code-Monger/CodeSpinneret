@@ -2,6 +2,7 @@ package rag
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -145,18 +146,154 @@ func extractSnippet(content, query string) string {
 		return content
 	}
 
-	// Try to find a line containing the query
+	// Check if the query is looking for a function
+	isFunctionQuery := strings.Contains(strings.ToLower(query), "function") ||
+		strings.Contains(query, "func ") ||
+		(strings.Contains(query, "(") && strings.Contains(query, ")"))
+
+	// Extract function name from query
+	functionName := ""
+	if isFunctionQuery {
+		// Try to extract function name from different query formats
+
+		// Format: "func functionName"
+		if strings.Contains(query, "func ") {
+			parts := strings.Split(query, "func ")
+			if len(parts) > 1 {
+				funcParts := strings.Fields(parts[1])
+				if len(funcParts) > 0 {
+					functionName = strings.TrimSuffix(funcParts[0], "(")
+				}
+			}
+		} else if strings.Contains(strings.ToLower(query), "function") {
+			// Format: "show me the functionName function"
+			queryTerms := strings.Fields(query)
+			for i, term := range queryTerms {
+				if strings.Contains(term, "function") && i > 0 {
+					functionName = queryTerms[i-1]
+					break
+				} else if strings.Contains(term, "function") && i < len(queryTerms)-1 {
+					functionName = queryTerms[i+1]
+					break
+				}
+			}
+		}
+
+		// If we still don't have a function name, try to find any word that might be a function name
+		if functionName == "" {
+			queryTerms := strings.Fields(query)
+			for _, term := range queryTerms {
+				// Skip common words and short terms
+				if len(term) <= 3 || isCommonWord(term) {
+					continue
+				}
+				functionName = term
+				break
+			}
+		}
+	}
+
+	// Try to find a line containing the function definition
+	if functionName != "" {
+		log.Printf("[RAG] Looking for function: %s", functionName)
+
+		// Try different function patterns
+		functionPatterns := []string{
+			fmt.Sprintf("func %s", functionName),
+			fmt.Sprintf("func %s(", functionName),
+			fmt.Sprintf("function %s", functionName),
+			fmt.Sprintf("function %s(", functionName),
+			fmt.Sprintf("def %s", functionName),
+			fmt.Sprintf("def %s(", functionName),
+		}
+
+		for _, pattern := range functionPatterns {
+			for i, line := range lines {
+				if strings.Contains(strings.ToLower(line), strings.ToLower(pattern)) {
+					// Find the end of the function
+					start := max(0, i-2)          // Include a couple of lines before for comments
+					end := min(len(lines), i+100) // Get up to 100 lines of the function
+
+					// Look for the opening and closing braces to find the function boundaries
+					braceCount := 0
+					inFunction := false
+
+					for j := i; j < len(lines); j++ {
+						if strings.Contains(lines[j], "{") {
+							braceCount++
+							inFunction = true
+						}
+						if strings.Contains(lines[j], "}") {
+							braceCount--
+							if inFunction && braceCount == 0 {
+								end = min(j+1, len(lines))
+								break
+							}
+						}
+					}
+
+					return strings.Join(lines[start:end], "\n")
+				}
+			}
+		}
+	}
+
+	// Try to find a line containing the exact query
 	for i, line := range lines {
 		if strings.Contains(strings.ToLower(line), strings.ToLower(query)) {
 			// Return a snippet around this line
 			start := max(0, i-5)
-			end := min(len(lines), i+6)
+			end := min(len(lines), i+20) // Increased context
 			return strings.Join(lines[start:end], "\n")
 		}
 	}
 
+	// Try to find lines containing parts of the query
+	queryTerms := strings.Fields(strings.ToLower(query))
+	bestMatchLine := -1
+	bestMatchCount := 0
+
+	for i, line := range lines {
+		lineLower := strings.ToLower(line)
+		matchCount := 0
+
+		for _, term := range queryTerms {
+			if len(term) > 3 && !isCommonWord(term) && strings.Contains(lineLower, term) {
+				matchCount++
+			}
+		}
+
+		if matchCount > bestMatchCount {
+			bestMatchCount = matchCount
+			bestMatchLine = i
+		}
+	}
+
+	if bestMatchLine >= 0 {
+		start := max(0, bestMatchLine-5)
+		end := min(len(lines), bestMatchLine+20)
+		return strings.Join(lines[start:end], "\n")
+	}
+
 	// If query not found, return the first 10 lines
 	return strings.Join(lines[:10], "\n")
+}
+
+// isCommonWord checks if a word is a common word that should be ignored
+func isCommonWord(word string) bool {
+	commonWords := map[string]bool{
+		"the": true, "and": true, "for": true, "with": true,
+		"that": true, "this": true, "show": true, "get": true,
+		"find": true, "what": true, "where": true, "when": true,
+		"how": true, "why": true, "who": true, "which": true,
+		"from": true, "into": true, "more": true, "some": true,
+		"such": true, "than": true, "then": true, "them": true,
+		"these": true, "they": true, "those": true, "will": true,
+		"would": true, "make": true, "like": true, "time": true,
+		"just": true, "know": true, "take": true, "people": true,
+	}
+
+	return commonWords[strings.ToLower(word)]
 }
 
 // isSourceCodeFile checks if a file extension is for a source code file

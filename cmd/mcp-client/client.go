@@ -164,6 +164,8 @@ func (c *Client) testTool(ctx context.Context, testTool string, toolsResult *mcp
 		return tools.TestStats(ctx, c.mcpClient)
 	case "workspace":
 		return tools.TestWorkspace(ctx, c.mcpClient)
+	case "workspace_integration":
+		return tools.TestWorkspaceIntegration(ctx, c.mcpClient)
 	default:
 		return fmt.Errorf("unknown tool: %s", testTool)
 	}
@@ -192,6 +194,7 @@ func (c *Client) testAllTools(ctx context.Context, toolsResult *mcp.ListToolsRes
 		"funcdef",
 		"spellcheck",
 		"stats",
+		"workspace_integration", // Test integration between workspace and other tools
 	}
 
 	// Track overall statistics

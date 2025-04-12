@@ -118,6 +118,11 @@ func HandleWorkspace(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 			return nil, fmt.Errorf("root_dir must be a string")
 		}
 
+		// Validate that root_dir is an absolute path
+		if !filepath.IsAbs(rootDir) {
+			return nil, fmt.Errorf("root_dir must be an absolute path, got: %s", rootDir)
+		}
+
 		// Extract user task
 		userTask, ok := arguments["user_task"].(string)
 		if !ok {
@@ -280,7 +285,7 @@ func RegisterWorkspace(mcpServer *server.MCPServer) {
 			mcp.Required(),
 		),
 		mcp.WithString("root_dir",
-			mcp.Description("Root directory of the source code (for 'initialize' operation)"),
+			mcp.Description("Root directory of the source code (for 'initialize' operation). Must be an absolute path."),
 		),
 		mcp.WithString("user_task",
 			mcp.Description("Task the user has set for the model (for 'initialize' operation)"),
