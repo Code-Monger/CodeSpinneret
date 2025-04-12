@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
+	"github.com/Code-Monger/CodeSpinneret/pkg/workspace"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -67,8 +68,25 @@ func HandleSearchReplace(ctx context.Context, request mcp.CallToolRequest) (*mcp
 		caseSensitive = caseSensitiveBool
 	}
 
+	// Extract session ID
+	sessionID, _ := arguments["session_id"].(string)
+
+	// Get root directory from workspace
+	rootDir := workspace.GetRootDir(sessionID)
+
+	// Log the root directory for debugging
+	log.Printf("[SearchReplace] Using workspace root directory: %s", rootDir)
+
+	// Resolve the directory path
+	var dirPath string
+	if filepath.IsAbs(directory) {
+		dirPath = directory
+	} else {
+		dirPath = filepath.Join(rootDir, directory)
+	}
+
 	// Perform the search and replace
-	result, err := searchAndReplace(directory, filePattern, searchPattern, replacement, useRegex, recursive, preview, caseSensitive)
+	result, err := searchAndReplace(dirPath, filePattern, searchPattern, replacement, useRegex, recursive, preview, caseSensitive)
 	if err != nil {
 		return nil, fmt.Errorf("error performing search and replace: %v", err)
 	}
@@ -318,6 +336,9 @@ func RegisterSearchReplace(mcpServer *server.MCPServer) {
 		),
 		mcp.WithBoolean("case_sensitive",
 			mcp.Description("Whether the search should be case sensitive"),
+		),
+		mcp.WithString("session_id",
+			mcp.Description("Session ID to use for resolving relative paths"),
 		),
 	)
 
