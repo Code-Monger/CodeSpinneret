@@ -15,8 +15,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// Environment variable name for root directory (same as patch tool)
-const EnvRootDir = "PATCH_ROOT_DIR"
+// No environment variables or default directories needed - using workspace consistently
 
 // HandleLineCount is the handler function for the linecount tool
 func HandleLineCount(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -53,9 +52,9 @@ func HandleLineCount(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 
 		// Get root directory from workspace
 		rootDir := workspace.GetRootDir(sessionID)
-		if rootDir == "" {
-			rootDir = "." // Default to current directory if workspace not set
-		}
+
+		// Log the root directory for debugging
+		log.Printf("[LineCount] Using workspace root directory: %s", rootDir)
 
 		// Join the root directory and file path
 		fullPath = filepath.Join(rootDir, filePath)

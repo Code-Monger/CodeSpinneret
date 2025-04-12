@@ -5,18 +5,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
+	"github.com/Code-Monger/CodeSpinneret/pkg/workspace"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// Environment variable name for root directory (same as patch and linecount tools)
-const EnvRootDir = "PATCH_ROOT_DIR"
+// No environment variables needed - using workspace consistently
 
 // Language represents a programming language with its function definition patterns
 type Language struct {
@@ -162,12 +161,14 @@ func HandleFuncDef(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 			return nil, fmt.Errorf("replacement_content must be provided for replace operation")
 		}
 	}
+	// Extract session ID
+	sessionID, _ := arguments["session_id"].(string)
 
-	// Get root directory from environment variable
-	rootDir := os.Getenv(EnvRootDir)
-	if rootDir == "" {
-		rootDir = "." // Default to current directory if env var not set
-	}
+	// Get root directory from workspace
+	rootDir := workspace.GetRootDir(sessionID)
+
+	// Log the root directory for debugging
+	log.Printf("[FuncDef] Using workspace root directory: %s", rootDir)
 
 	// Resolve the file path
 	var fullPath string
@@ -721,6 +722,9 @@ func RegisterFuncDef(mcpServer *server.MCPServer) {
 		),
 		mcp.WithString("replacement_content",
 			mcp.Description("The new content to replace the function with (for 'replace' operation). Must include the complete function definition"),
+		),
+		mcp.WithString("session_id",
+			mcp.Description("Session ID to use for resolving relative paths"),
 		),
 	)
 

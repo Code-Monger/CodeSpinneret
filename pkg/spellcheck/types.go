@@ -1,7 +1,6 @@
 package spellcheck
 
-// Environment variable name for root directory (same as patch and linecount tools)
-const EnvRootDir = "PATCH_ROOT_DIR"
+// No environment variables needed - using workspace consistently
 
 // SpellCheckResult represents a spelling issue found in the code
 type SpellCheckResult struct {

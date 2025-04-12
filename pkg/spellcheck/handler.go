@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
+	"github.com/Code-Monger/CodeSpinneret/pkg/workspace"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -136,12 +137,14 @@ func HandleSpellCheck(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 			}
 		}
 	}
+	// Extract session ID
+	sessionID, _ := arguments["session_id"].(string)
 
-	// Get root directory from environment variable
-	rootDir := os.Getenv(EnvRootDir)
-	if rootDir == "" {
-		rootDir = "." // Default to current directory if env var not set
-	}
+	// Get root directory from workspace
+	rootDir := workspace.GetRootDir(sessionID)
+
+	// Log the root directory for debugging
+	log.Printf("[SpellCheck] Using workspace root directory: %s", rootDir)
 
 	// Resolve the path
 	var fullPath string
@@ -247,6 +250,9 @@ func RegisterSpellCheck(mcpServer *server.MCPServer) {
 		),
 		mcp.WithArray("custom_dictionary",
 			mcp.Description("A list of custom words to consider as correctly spelled"),
+		),
+		mcp.WithString("session_id",
+			mcp.Description("Session ID to use for resolving relative paths"),
 		),
 	)
 

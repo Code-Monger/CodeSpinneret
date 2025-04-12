@@ -11,12 +11,12 @@ import (
 	"strings"
 
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
+	"github.com/Code-Monger/CodeSpinneret/pkg/workspace"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// Environment variable name for root directory (same as patch and linecount tools)
-const EnvRootDir = "PATCH_ROOT_DIR"
+// No environment variables needed - using workspace consistently
 
 // Language represents a programming language with its file extensions and function definition patterns
 type Language struct {
@@ -121,12 +121,14 @@ func HandleFindFunc(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 	if searchDir == "" {
 		searchDir = "." // Default to current directory
 	}
+	// Extract session ID
+	sessionID, _ := arguments["session_id"].(string)
 
-	// Get root directory from environment variable
-	rootDir := os.Getenv(EnvRootDir)
-	if rootDir == "" {
-		rootDir = searchDir // Default to search directory if env var not set
-	}
+	// Get root directory from workspace
+	rootDir := workspace.GetRootDir(sessionID)
+
+	// Log the root directory for debugging
+	log.Printf("[FindFunc] Using workspace root directory: %s", rootDir)
 
 	// Resolve the search directory path
 	var fullSearchDir string
@@ -361,6 +363,9 @@ func RegisterFindFunc(mcpServer *server.MCPServer) {
 		),
 		mcp.WithBoolean("recursive",
 			mcp.Description("Whether to search recursively in subdirectories for comprehensive analysis (default: true)"),
+		),
+		mcp.WithString("session_id",
+			mcp.Description("Session ID to use for resolving relative paths"),
 		),
 	)
 
