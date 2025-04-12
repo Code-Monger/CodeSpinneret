@@ -156,14 +156,69 @@ func applyPatch(patchContent, targetDir, rootDir string, stripLevel int, dryRun 
 
 		// Check if the file exists
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			result.FilesSkipped[targetPath] = "file does not exist"
+			// If file doesn't exist but we have only added lines (no removed lines)
+			onlyAdds := true
+			for _, hunk := range filePatch.Hunks {
+				if len(hunk.Removed) > 0 {
+					onlyAdds = false
+					break
+				}
+			}
+			
+			if onlyAdds && !dryRun {
+				// Create directory if it doesn't exist
+				dir := filepath.Dir(fullPath)
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					result.FilesSkipped[targetPath] = fmt.Sprintf("error creating directory: %v", err)
+					continue
+				}
+				
+				// Create new file with only the added content
+				var newContent strings.Builder
+				for _, hunk := range filePatch.Hunks {
+					for _, line := range hunk.Added {
+						newContent.WriteString(line)
+						newContent.WriteString("\n")
+					}
+				}
+				
+				// Write the new file
+				if err := os.WriteFile(fullPath, []byte(newContent.String()), 0644); err != nil {
+					result.FilesSkipped[targetPath] = fmt.Sprintf("error creating file: %v", err)
+					continue
+				}
+				
+				result.FilesPatched = append(result.FilesPatched, targetPath)
+				result.HunksApplied += len(filePatch.Hunks)
+			} else {
+				result.FilesSkipped[targetPath] = "file does not exist"
+			}
 			continue
 		}
 
-		// Read the file content
+		// Check if file is binary
+		fileInfo, err := os.Stat(fullPath)
+		if err != nil {
+			result.FilesSkipped[targetPath] = fmt.Sprintf("error checking file: %v", err)
+			continue
+		}
+
+		// Skip directories
+		if fileInfo.IsDir() {
+			result.FilesSkipped[targetPath] = "is a directory"
+			continue
+		}
+
+		// Read file contents with binary check
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
 			result.FilesSkipped[targetPath] = fmt.Sprintf("error reading file: %v", err)
+			continue
+		}
+
+		// Check for binary content
+		if isBinary(content) {
+			result.FilesSkipped[targetPath] = "binary file not supported"
 			continue
 		}
 
@@ -192,6 +247,17 @@ func applyPatch(patchContent, targetDir, rootDir string, stripLevel int, dryRun 
 	}
 
 	return result, nil
+}
+
+// isBinary checks if content appears to be binary
+func isBinary(content []byte) bool {
+	// Check for null bytes which usually indicate binary content
+	for _, b := range content {
+		if b == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // parsePatch parses a patch file content into a slice of FilePatch objects
@@ -286,10 +352,7 @@ func parsePatch(patchContent string) ([]FilePatch, error) {
 					j++
 				}
 
-				// Set all context lines
-				hunk.Context = contextLines
-
-				// Set the context lines
+				// Set the context lines (removed duplicate line)
 				hunk.Context = contextLines
 
 				// Update the line index
@@ -351,79 +414,87 @@ func applyHunks(content string, hunks []Hunk) (string, int, int) {
 
 // findHunkLocation finds the location of a hunk in the file content
 func findHunkLocation(lines []string, hunk Hunk) int {
-	// If there are no removed lines, we can't find the location
-	if len(hunk.Removed) == 0 {
-		// If there are context lines, try to find them
-		if len(hunk.Context) > 0 {
-			return findContextLocation(lines, hunk.Context)
-		}
-		return -1
-	}
+    // Create a pattern using the context and removed lines
+    if len(hunk.Context) == 0 && len(hunk.Removed) == 0 {
+        // If there's nothing to match, we can't find the location
+        return -1
+    }
 
-	// First try to find the exact match with context lines
-	if len(hunk.Context) > 0 {
-		// Create a pattern with context lines and removed lines
-		pattern := make([]string, 0, len(hunk.Context)+len(hunk.Removed))
-
-		// Add all context and removed lines in the correct order
-		contextIndex := 0
-		removedIndex := 0
-		inRemovedSection := false
-
-		// Process context lines that come before removed lines
-		for contextIndex < len(hunk.Context) && !inRemovedSection {
-			// Check if this context line is actually a removed line
-			if removedIndex < len(hunk.Removed) && hunk.Context[contextIndex] == hunk.Removed[removedIndex] {
-				inRemovedSection = true
-				break
-			}
-
-			pattern = append(pattern, hunk.Context[contextIndex])
-			contextIndex++
-		}
-
-		// Add all removed lines
-		pattern = append(pattern, hunk.Removed...)
-
-		// Add remaining context lines that come after removed lines
-		for contextIndex < len(hunk.Context) {
-			pattern = append(pattern, hunk.Context[contextIndex])
-			contextIndex++
-		}
-
-		// Try to find the pattern in the file
-		for i := 0; i <= len(lines)-len(pattern); i++ {
-			match := true
-			for j := 0; j < len(pattern); j++ {
-				if i+j >= len(lines) || lines[i+j] != pattern[j] {
-					match = false
-					break
-				}
-			}
-
-			if match {
-				// Return the position where removed lines start
-				return i + (len(pattern) - len(hunk.Removed) - (len(hunk.Context) - contextIndex))
-			}
-		}
-	}
-
-	// If we couldn't find the pattern with context, try just the removed lines
-	for i := 0; i <= len(lines)-len(hunk.Removed); i++ {
-		match := true
-		for j := 0; j < len(hunk.Removed); j++ {
-			if i+j >= len(lines) || lines[i+j] != hunk.Removed[j] {
-				match = false
-				break
-			}
-		}
-
-		if match {
-			return i
-		}
-	}
-
-	return -1
+    // Try to find the location based on context and removed lines
+    // Use a sliding window approach to check for matches
+    
+    // First, construct the pattern we're looking for
+    var pattern []string
+    
+    // If we have removed lines, include them in the pattern
+    if len(hunk.Removed) > 0 {
+        pattern = hunk.Removed
+    } else if len(hunk.Context) > 0 {
+        // If no removed lines but we have context, use that
+        pattern = hunk.Context
+    }
+    
+    // If we have context, use it to verify the match location
+    var contextBefore, contextAfter []string
+    if len(hunk.Context) > 0 {
+        // Determine context lines that appear before and after the removal
+        // This is an approximate approach - in a real patch, context would be more 
+        // precisely defined relative to removed lines
+        beforeCount := len(hunk.Context) / 3 // Use about 1/3 of context before
+        contextBefore = hunk.Context[:beforeCount]
+        contextAfter = hunk.Context[beforeCount:]
+    }
+    
+    // Find potential matches for the pattern
+    for i := 0; i <= len(lines)-len(pattern); i++ {
+        // Check if this position matches our pattern
+        match := true
+        for j := 0; j < len(pattern); j++ {
+            if i+j >= len(lines) || lines[i+j] != pattern[j] {
+                match = false
+                break
+            }
+        }
+        
+        if match {
+            // If we have context lines, verify they match around this position
+            if len(contextBefore) > 0 {
+                // Check context before
+                beforeMatch := true
+                for j := 0; j < len(contextBefore); j++ {
+                    beforePos := i - len(contextBefore) + j
+                    if beforePos < 0 || beforePos >= len(lines) || lines[beforePos] != contextBefore[j] {
+                        beforeMatch = false
+                        break
+                    }
+                }
+                
+                // Check context after
+                afterMatch := true
+                for j := 0; j < len(contextAfter); j++ {
+                    afterPos := i + len(pattern) + j
+                    if afterPos >= len(lines) || lines[afterPos] != contextAfter[j] {
+                        afterMatch = false
+                        break
+                    }
+                }
+                
+                // If both context matches, we found our location
+                if beforeMatch && afterMatch {
+                    return i
+                }
+                
+                // If we found a match but context doesn't match, 
+                // continue looking as it might be coincidental
+                continue
+            }
+            
+            // If no context to check, we found our location
+            return i
+        }
+    }
+    
+    return -1
 }
 
 // findContextLocation finds the location of context lines in the file content
