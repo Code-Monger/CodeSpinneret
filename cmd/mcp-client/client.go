@@ -136,6 +136,8 @@ func (c *Client) testTool(ctx context.Context, testTool string, toolsResult *mcp
 		return tools.TestFileSearch(ctx, c.mcpClient)
 	case "cmdexec":
 		return tools.TestCommandExecution(ctx, c.mcpClient)
+	case "shell":
+		return tools.TestShell(ctx, c.mcpClient)
 	case "searchreplace":
 		return tools.TestSearchReplace(ctx, c.mcpClient)
 	case "screenshot":
@@ -181,6 +183,7 @@ func (c *Client) testAllTools(ctx context.Context, toolsResult *mcp.ListToolsRes
 		"calculator",
 		"filesearch",
 		"cmdexec",
+		"shell",
 		"searchreplace",
 		"screenshot",
 		"websearch",

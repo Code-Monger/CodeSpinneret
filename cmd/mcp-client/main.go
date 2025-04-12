@@ -13,7 +13,7 @@ import (
 var (
 	serverURL   = flag.String("server", "http://localhost:8080", "MCP server URL")
 	timeoutSecs = flag.Int("timeout", 60, "Client timeout in seconds")
-	testTool    = flag.String("tool", "calculator", "Tool to test (calculator, filesearch, cmdexec, searchreplace, screenshot, websearch, webfetch, rag, codeanalysis, patch, linecount, findcallers, findfunc, funcdef, spellcheck, stats, workspace, all)")
+	testTool    = flag.String("tool", "calculator", "Tool to test (calculator, filesearch, cmdexec, shell, searchreplace, screenshot, websearch, webfetch, rag, codeanalysis, patch, linecount, findcallers, findfunc, funcdef, spellcheck, stats, workspace, all)")
 )
 
 func main() {

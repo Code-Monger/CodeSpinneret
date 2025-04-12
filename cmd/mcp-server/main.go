@@ -25,6 +25,7 @@ import (
 	"github.com/Code-Monger/CodeSpinneret/pkg/screenshot"
 	"github.com/Code-Monger/CodeSpinneret/pkg/searchreplace"
 	"github.com/Code-Monger/CodeSpinneret/pkg/serverinfo"
+	"github.com/Code-Monger/CodeSpinneret/pkg/shell"
 	"github.com/Code-Monger/CodeSpinneret/pkg/spellcheck"
 	"github.com/Code-Monger/CodeSpinneret/pkg/stats"
 	"github.com/Code-Monger/CodeSpinneret/pkg/webfetch"
@@ -73,6 +74,7 @@ func main() {
 	serverinfo.RegisterServerInfo(mcpServer)
 	filesearch.RegisterFileSearch(mcpServer)
 	cmdexec.RegisterCommandExecution(mcpServer)
+	shell.RegisterShell(mcpServer) // Register shell tool
 	searchreplace.RegisterSearchReplace(mcpServer)
 	screenshot.RegisterScreenshot(mcpServer)
 	websearch.RegisterWebSearch(mcpServer)
