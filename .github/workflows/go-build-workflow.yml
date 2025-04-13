@@ -34,8 +34,22 @@ jobs:
           echo "Found applications: $APPS"
           echo "apps=$APPS" >> $GITHUB_OUTPUT
 
-      - name: Check and fix vendor directory
+      - name: Check for missing dependencies and fix vendor directory
         run: |
+          # First, tidy up the go.mod file to ensure all dependencies are properly recorded
+          echo "Tidying go.mod and adding missing dependencies..."
+          go mod tidy
+          
+          # Install specific dependencies that might be missing
+          echo "Ensuring specific dependencies are available..."
+          go get github.com/PuerkitoBio/goquery
+          go get github.com/andybalholm/cascadia
+          go get golang.org/x/net
+          
+          # Run go mod tidy again to ensure everything is properly recorded
+          go mod tidy
+          
+          # If vendor directory exists, update it
           if [ -d "vendor" ]; then
             echo "Vendor directory found, syncing with go.mod..."
             go mod vendor
