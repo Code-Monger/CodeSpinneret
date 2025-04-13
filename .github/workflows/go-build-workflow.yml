@@ -34,6 +34,13 @@ jobs:
           echo "Found applications: $APPS"
           echo "apps=$APPS" >> $GITHUB_OUTPUT
 
+      - name: Check and fix vendor directory
+        run: |
+          if [ -d "vendor" ]; then
+            echo "Vendor directory found, syncing with go.mod..."
+            go mod vendor
+          fi
+
       - name: Build for multiple platforms
         run: |
           mkdir -p ./dist
@@ -41,16 +48,16 @@ jobs:
             echo "Building $app for multiple platforms..."
             
             # Linux build (amd64)
-            GOOS=linux GOARCH=amd64 go build -tags netgo -ldflags="-s -w" -o ./dist/${app}_linux_amd64 ./cmd/$app
+            GOOS=linux GOARCH=amd64 go build -mod=vendor -tags netgo -ldflags="-s -w" -o ./dist/${app}_linux_amd64 ./cmd/$app
             
             # Windows build (amd64)
-            GOOS=windows GOARCH=amd64 go build -tags netgo -ldflags="-s -w" -o ./dist/${app}_windows_amd64.exe ./cmd/$app
+            GOOS=windows GOARCH=amd64 go build -mod=vendor -tags netgo -ldflags="-s -w" -o ./dist/${app}_windows_amd64.exe ./cmd/$app
             
             # macOS build (amd64)
-            GOOS=darwin GOARCH=amd64 go build -tags netgo -ldflags="-s -w" -o ./dist/${app}_darwin_amd64 ./cmd/$app
+            GOOS=darwin GOARCH=amd64 go build -mod=vendor -tags netgo -ldflags="-s -w" -o ./dist/${app}_darwin_amd64 ./cmd/$app
             
             # macOS build (arm64) for M1/M2 Macs
-            GOOS=darwin GOARCH=arm64 go build -tags netgo -ldflags="-s -w" -o ./dist/${app}_darwin_arm64 ./cmd/$app
+            GOOS=darwin GOARCH=arm64 go build -mod=vendor -tags netgo -ldflags="-s -w" -o ./dist/${app}_darwin_arm64 ./cmd/$app
           done
 
       - name: Create ZIP archive
