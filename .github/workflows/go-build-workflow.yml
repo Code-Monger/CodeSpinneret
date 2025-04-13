@@ -1,0 +1,81 @@
+name: Build and Release Go Applications
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  RELEASE_NAME: latest-release
+  GO_VERSION: '1.22'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+
+      - name: Find Go applications in cmd directory
+        id: find-apps
+        run: |
+          APPS=$(find ./cmd -maxdepth 1 -mindepth 1 -type d -printf "%f\n" | tr '\n' ' ')
+          echo "Found applications: $APPS"
+          echo "apps=$APPS" >> $GITHUB_OUTPUT
+
+      - name: Build for multiple platforms
+        run: |
+          mkdir -p ./dist
+          for app in ${{ steps.find-apps.outputs.apps }}; do
+            echo "Building $app for multiple platforms..."
+            
+            # Linux build (amd64)
+            GOOS=linux GOARCH=amd64 go build -tags netgo -ldflags="-s -w" -o ./dist/${app}_linux_amd64 ./cmd/$app
+            
+            # Windows build (amd64)
+            GOOS=windows GOARCH=amd64 go build -tags netgo -ldflags="-s -w" -o ./dist/${app}_windows_amd64.exe ./cmd/$app
+            
+            # macOS build (amd64)
+            GOOS=darwin GOARCH=amd64 go build -tags netgo -ldflags="-s -w" -o ./dist/${app}_darwin_amd64 ./cmd/$app
+            
+            # macOS build (arm64) for M1/M2 Macs
+            GOOS=darwin GOARCH=arm64 go build -tags netgo -ldflags="-s -w" -o ./dist/${app}_darwin_arm64 ./cmd/$app
+          done
+
+      - name: Create ZIP archive
+        run: |
+          cd dist
+          zip -r ../release.zip *
+          cd ..
+
+      - name: Delete existing release if it exists
+        run: |
+          if gh release view ${{ env.RELEASE_NAME }} &>/dev/null; then
+            echo "Deleting existing release: ${{ env.RELEASE_NAME }}"
+            gh release delete ${{ env.RELEASE_NAME }} --yes
+          else
+            echo "No existing release found with name: ${{ env.RELEASE_NAME }}"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create new release
+        run: |
+          gh release create ${{ env.RELEASE_NAME }} \
+            --title "${{ env.RELEASE_NAME }}" \
+            --notes "Automated build from $(git rev-parse --short HEAD)" \
+            --latest \
+            release.zip
+        env:
+          GH_TOKEN: ${{ github.token }}
